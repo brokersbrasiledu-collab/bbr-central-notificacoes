@@ -270,7 +270,7 @@ select {
   display: flex;
   flex-direction: column;
   gap: 26px;
-  padding: 26px 18px calc(22px + env(safe-area-inset-bottom));
+  padding: calc(26px + env(safe-area-inset-top)) 18px calc(22px + env(safe-area-inset-bottom));
   border-right: 1px solid var(--borda);
   position: sticky;
   top: 0;
@@ -365,8 +365,11 @@ select {
   height: 17px;
 }
 
+/* O padding do topo soma a área segura: no iPhone, com o app salvo na
+   tela inicial, a barra de status fica POR CIMA do conteúdo e o título
+   encostaria nela. */
 .conteudo {
-  padding: 34px 38px calc(46px + env(safe-area-inset-bottom));
+  padding: calc(34px + env(safe-area-inset-top)) 38px calc(46px + env(safe-area-inset-bottom));
   max-width: 900px;
   width: 100%;
 }
@@ -509,104 +512,117 @@ h2 {
   border-radius: var(--raio-g);
 }
 
+/* ── Filtros do histórico ──────────────────────────────────── */
+
+/* Uma linha só no computador; no celular a busca ocupa a largura toda e
+   os dois seletores dividem a linha de baixo. */
+.filtros {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  margin-bottom: 26px;
+}
+
+.filtros__busca,
+.filtros__campo {
+  padding: 9px 13px;
+  font-size: 13.5px;
+}
+
+.filtros__campo {
+  width: auto;
+  min-width: 132px;
+  padding-right: 32px;
+  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+}
+
+.filtros__busca::-webkit-search-cancel-button {
+  filter: grayscale(1) opacity(0.5);
+}
+
 /* ── Linha do tempo ────────────────────────────────────────── */
 
-.resumo {
-  display: flex;
-  gap: 28px;
-  padding-bottom: 22px;
-  margin-bottom: 22px;
-  border-bottom: 1px solid var(--borda);
-  flex-wrap: wrap;
+.dia + .dia {
+  margin-top: 30px;
 }
 
-.resumo__item strong {
-  display: block;
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--ouro);
-  line-height: 1.2;
-}
-
-.resumo__item span {
+.dia__titulo {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 6px 0 10px;
+  margin-bottom: 4px;
+  background: var(--preto);
   font-size: 11.5px;
-  letter-spacing: 0.07em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--texto-fraco);
 }
 
-.tempo {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
+.aviso {
+  padding: 16px 18px;
+  margin-bottom: 12px;
+  border: 1px solid var(--borda);
+  border-left: 2px solid var(--cinza);
+  border-radius: var(--raio-g);
+  background: var(--superficie);
 }
 
-/* A linha vertical fina em ouro é o único ornamento da timeline. */
-.tempo__item {
-  position: relative;
-  padding: 0 0 26px 26px;
-  border-left: 1px solid var(--borda);
+/* O acento da esquerda é o que diferencia o tipo de relance. */
+.aviso--lead,
+.aviso--meta {
+  border-left-color: var(--ouro);
 }
 
-.tempo__item:last-child {
-  border-left-color: transparent;
-  padding-bottom: 6px;
+.aviso--alerta {
+  border-left-color: var(--vermelho);
 }
 
-.tempo__item::before {
-  content: '';
-  position: absolute;
-  left: -4px;
-  top: 6px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--cinza);
-  border: 1px solid var(--preto);
-}
-
-.tempo__item--lead::before,
-.tempo__item--meta::before {
-  background: var(--ouro);
-}
-
-.tempo__item--alerta::before {
-  background: var(--vermelho);
-}
-
-.tempo__cabeca {
+.aviso__topo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 5px;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
 }
 
-.tempo__titulo {
-  font-size: 15px;
+.aviso__hora {
+  font-size: 12px;
+  color: var(--texto-fraco);
+  font-variant-numeric: tabular-nums;
+}
+
+.aviso__titulo {
+  font-size: 15.5px;
   font-weight: 600;
+  line-height: 1.35;
+  margin-bottom: 6px;
 }
 
-.tempo__texto {
+.aviso__texto {
   color: var(--texto-suave);
   font-size: 14px;
-  /* Mensagens vindas do n8n costumam ter várias linhas. Sem isto, tudo
-     viraria um parágrafo só e o aviso ficaria ilegível. */
+  line-height: 1.55;
+  /* Mensagens vindas do n8n têm várias linhas. Sem isto, tudo viraria um
+     parágrafo só e o aviso ficaria ilegível. */
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
 
-.tempo__texto strong {
+.aviso__texto strong {
   color: var(--texto);
   font-weight: 600;
 }
 
-.tempo__meta {
-  margin-top: 7px;
+.aviso__rodape {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--borda);
   display: flex;
-  gap: 12px;
+  gap: 14px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--texto-fraco);
 }
 
@@ -690,12 +706,69 @@ h2 {
 .copiavel {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 10px;
+  margin-top: 10px;
   padding: 9px 12px;
   border: 1px solid var(--borda);
   border-radius: var(--raio);
   background: var(--preto);
+}
+
+.copiavel__rotulo {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--texto-fraco);
+  min-width: 34px;
+}
+
+/* Instruções de uso do webhook */
+.instrucoes {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--borda);
+}
+
+.passos {
+  margin: 8px 0 0 18px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--texto-suave);
+}
+
+.bloco-codigo {
+  margin-top: 12px;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  overflow: hidden;
+}
+
+.bloco-codigo__topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 8px 7px 12px;
+  background: rgba(228, 229, 222, 0.03);
+  border-bottom: 1px solid var(--borda);
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--texto-fraco);
+}
+
+.bloco-codigo pre {
+  padding: 12px;
+  margin: 0;
+  overflow-x: auto;
+  background: var(--preto);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--texto-suave);
+  white-space: pre;
 }
 
 .copiavel code {
@@ -834,12 +907,14 @@ h2 {
     padding: 6px 4px;
   }
 
+  /* No celular a lateral virou barra inferior, então ela não segura mais
+     a área segura do topo — quem passa a fazer isso é o conteúdo. */
   .conteudo {
-    padding: 24px 20px 110px;
+    padding: calc(20px + env(safe-area-inset-top)) 20px 110px;
   }
 
   .cabecalho {
-    margin-bottom: 24px;
+    margin-bottom: 22px;
   }
 
   h1 {
@@ -850,8 +925,29 @@ h2 {
     grid-template-columns: 1fr;
   }
 
-  .resumo {
-    gap: 22px;
+  /* Busca em cima, ocupando tudo; os dois seletores dividem a linha. */
+  .filtros {
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin-bottom: 22px;
+  }
+
+  .filtros__busca {
+    grid-column: 1 / -1;
+  }
+
+  .filtros__campo {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .dia__titulo {
+    /* Fica logo abaixo da área segura ao rolar, sem sumir sob o entalhe. */
+    top: env(safe-area-inset-top);
+  }
+
+  .aviso {
+    padding: 15px 16px;
   }
 }
 

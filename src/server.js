@@ -8,6 +8,7 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'node:path';
+import fs from 'node:fs';
 
 import { config, RAIZ, validarConfig } from './config.js';
 import { iniciarBanco } from './db/index.js';
@@ -87,12 +88,20 @@ const PUBLICO = path.join(RAIZ, 'public');
 /**
  * O service worker precisa de escopo raiz e não pode ficar preso em cache,
  * senão o navegador continua rodando a versão antiga depois de um deploy.
+ *
+ * A versão da build é injetada no arquivo: assim o nome do cache muda a
+ * cada deploy, o service worker novo assume e o antigo é descartado com
+ * tudo que ele guardava. Sem isso, um deploy pode não aparecer para quem
+ * já tinha o app aberto no celular.
  */
+const swOriginal = fs.readFileSync(path.join(PUBLICO, 'sw.js'), 'utf8');
+const swServido = swOriginal.replace("const VERSAO = 'bbr-v1'", `const VERSAO = 'bbr-${config.versao}'`);
+
 app.get('/sw.js', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Service-Worker-Allowed', '/');
   res.type('application/javascript');
-  res.sendFile(path.join(PUBLICO, 'sw.js'));
+  res.send(swServido);
 });
 
 /**
@@ -103,30 +112,35 @@ app.get('/sw.js', (_req, res) => {
 const ATALHOS_ICONE = {
   '/apple-touch-icon.png': 'apple-touch-icon.png',
   '/apple-touch-icon-precomposed.png': 'apple-touch-icon.png',
-  '/favicon.ico': 'favicon-32.png',
+  '/favicon.ico': 'favicon.ico',
+  '/favicon.svg': 'favicon.svg',
 };
 
 for (const [rota, arquivo] of Object.entries(ATALHOS_ICONE)) {
   app.get(rota, (_req, res) => {
-    res.setHeader('Cache-Control', 'public, max-age=604800');
-    res.type('image/png');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.type(path.extname(arquivo));
     res.sendFile(path.join(PUBLICO, 'icones', arquivo));
   });
 }
 
+/**
+ * Tudo é servido com "no-cache", que não significa "não guarde" e sim
+ * "confirme comigo antes de reusar". Com o ETag, o navegador manda um
+ * pedido curtinho e recebe 304 quando nada mudou — custo desprezível
+ * para um app interno, e em troca todo deploy aparece na hora.
+ *
+ * Cache longo aqui já custou caro: uma alteração na tela de webhooks e o
+ * favicon novo ficaram invisíveis porque o navegador segurava a versão
+ * anterior por uma hora (e os ícones, por uma semana).
+ */
 app.use(
   express.static(PUBLICO, {
     etag: true,
-    maxAge: config.producao ? '1h' : 0,
-    setHeaders(res, arquivo) {
-      // Ícones e imagens podem ficar muito tempo em cache.
-      if (/\.(png|svg|ico|webp)$/.test(arquivo)) {
-        res.setHeader('Cache-Control', 'public, max-age=604800');
-      }
-      // O manifest e o HTML precisam ser revalidados sempre.
-      if (/(manifest\.json|index\.html)$/.test(arquivo)) {
-        res.setHeader('Cache-Control', 'no-cache');
-      }
+    lastModified: true,
+    maxAge: 0,
+    setHeaders(res) {
+      res.setHeader('Cache-Control', 'no-cache');
     },
   })
 );

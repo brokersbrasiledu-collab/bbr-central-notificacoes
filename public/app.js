@@ -330,7 +330,40 @@ const ehAdmin = () => estado.usuario?.nivel === 'admin';
 
 /* ── Histórico ─────────────────────────────────────────────── */
 
-function linhaDoTempo(n) {
+/** Converte "AAAA-MM-DD HH:MM:SS" (UTC) numa Date local. */
+const paraData = (utc) => new Date(String(utc).replace(' ', 'T') + 'Z');
+
+/** Só a hora, que é o que interessa dentro de um dia já identificado. */
+function horaDe(utc) {
+  return paraData(utc).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Cabeçalho do grupo: "Hoje", "Ontem" ou "quinta-feira, 31 de julho". */
+function rotuloDoDia(utc) {
+  const data = paraData(utc);
+  const hoje = new Date();
+  const ontem = new Date();
+  ontem.setDate(hoje.getDate() - 1);
+
+  if (data.toDateString() === hoje.toDateString()) return 'Hoje';
+  if (data.toDateString() === ontem.toDateString()) return 'Ontem';
+
+  const texto = data.toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    ...(data.getFullYear() !== hoje.getFullYear() ? { year: 'numeric' } : {}),
+  });
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+/**
+ * Um aviso da linha do tempo.
+ *
+ * Origem, público e contagem de entregas só aparecem para o administrador:
+ * para quem só acompanha, é ruído em volta da mensagem.
+ */
+function cartaoAviso(n) {
   const origem =
     n.origem === 'webhook'
       ? `Webhook${n.webhook ? ` · ${esc(n.webhook)}` : ''}`
@@ -338,52 +371,108 @@ function linhaDoTempo(n) {
         ? `Envio manual${n.autor ? ` · ${esc(n.autor)}` : ''}`
         : 'Sistema';
 
+  const rodape = ehAdmin()
+    ? `<div class="aviso__rodape">
+         <span>${origem}</span>
+         <span>${esc(rotuloPublico(n.publico))}</span>
+         ${n.entregues ? `<span>${n.entregues} entregue(s)</span>` : ''}
+       </div>`
+    : '';
+
   return `
-    <li class="tempo__item tempo__item--${esc(n.tipo)}">
-      <div class="tempo__cabeca">
+    <article class="aviso aviso--${esc(n.tipo)}">
+      <div class="aviso__topo">
         <span class="etiqueta etiqueta--${esc(n.tipo)}">${esc(ROTULO_TIPO[n.tipo] || n.tipo)}</span>
-        <span class="tempo__titulo">${esc(n.titulo)}</span>
+        <time class="aviso__hora">${esc(horaDe(n.criada_em))}</time>
       </div>
-      <p class="tempo__texto">${formatarMensagem(n.texto)}</p>
-      <div class="tempo__meta">
-        <span>${esc(quando(n.criada_em))}</span>
-        <span>${origem}</span>
-        <span>${esc(rotuloPublico(n.publico))}</span>
-        ${n.entregues ? `<span>${n.entregues} entregue(s)</span>` : ''}
-      </div>
-    </li>`;
+      <h3 class="aviso__titulo">${esc(n.titulo)}</h3>
+      <p class="aviso__texto">${formatarMensagem(n.texto)}</p>
+      ${rodape}
+    </article>`;
 }
 
-async function telaHistorico(container) {
+/** Quebra a lista em blocos por dia, mantendo a ordem que veio. */
+function agruparPorDia(itens) {
+  const grupos = [];
+  for (const n of itens) {
+    const rotulo = rotuloDoDia(n.criada_em);
+    if (!grupos.length || grupos.at(-1).rotulo !== rotulo) grupos.push({ rotulo, itens: [] });
+    grupos.at(-1).itens.push(n);
+  }
+  return grupos;
+}
+
+const filtros = { busca: '', tipo: '', periodo: '' };
+
+function telaHistorico(container) {
   container.innerHTML = `
-    <div class="resumo" id="resumo"></div>
-    <ul class="tempo" id="linha-tempo"></ul>
+    <form class="filtros" id="filtros" role="search">
+      <input
+        type="search"
+        id="f-busca"
+        class="filtros__busca"
+        placeholder="Buscar no título ou na mensagem"
+        autocomplete="off"
+        value="${esc(filtros.busca)}"
+      />
+      <select id="f-tipo" class="filtros__campo" aria-label="Filtrar por tipo">
+        <option value="">Todos os tipos</option>
+        ${TIPOS_FILTRO.map(
+          ([valor, rotulo]) =>
+            `<option value="${valor}" ${filtros.tipo === valor ? 'selected' : ''}>${rotulo}</option>`
+        ).join('')}
+      </select>
+      <select id="f-periodo" class="filtros__campo" aria-label="Filtrar por período">
+        <option value="">Qualquer data</option>
+        <option value="hoje" ${filtros.periodo === 'hoje' ? 'selected' : ''}>Hoje</option>
+        <option value="7d" ${filtros.periodo === '7d' ? 'selected' : ''}>Últimos 7 dias</option>
+        <option value="30d" ${filtros.periodo === '30d' ? 'selected' : ''}>Últimos 30 dias</option>
+      </select>
+    </form>
+
+    <div id="linha-tempo"></div>
     <div id="mais-area"></div>`;
 
-  await carregarResumo();
-  estado.notificacoes = [];
-  estado.proximoCursor = null;
-  await carregarNotificacoes(true);
+  // A busca espera a digitação parar, para não disparar uma consulta por tecla.
+  let temporizador;
+  $('#f-busca').addEventListener('input', (evento) => {
+    clearTimeout(temporizador);
+    filtros.busca = evento.target.value;
+    temporizador = setTimeout(() => carregarNotificacoes(true), 320);
+  });
+
+  $('#f-tipo').addEventListener('change', (e) => {
+    filtros.tipo = e.target.value;
+    carregarNotificacoes(true);
+  });
+  $('#f-periodo').addEventListener('change', (e) => {
+    filtros.periodo = e.target.value;
+    carregarNotificacoes(true);
+  });
+
+  return carregarNotificacoes(true);
 }
 
-async function carregarResumo() {
-  try {
-    const { total, hoje } = await api('/notificacoes/resumo');
-    $('#resumo').innerHTML = `
-      <div class="resumo__item"><strong>${hoje}</strong><span>hoje</span></div>
-      <div class="resumo__item"><strong>${total}</strong><span>no total</span></div>`;
-  } catch {
-    $('#resumo').innerHTML = '';
-  }
-}
+const TIPOS_FILTRO = [
+  ['lead', 'Leads'],
+  ['meta', 'Metas'],
+  ['alerta', 'Alertas'],
+  ['aviso', 'Avisos'],
+  ['sistema', 'Sistema'],
+];
 
 async function carregarNotificacoes(reiniciar = false) {
   const lista = $('#linha-tempo');
   const areaMais = $('#mais-area');
   if (!lista) return;
 
+  if (reiniciar) estado.proximoCursor = null;
+
   const parametros = new URLSearchParams({ limite: '30' });
   if (!reiniciar && estado.proximoCursor) parametros.set('antes', estado.proximoCursor);
+  if (filtros.busca.trim()) parametros.set('busca', filtros.busca.trim());
+  if (filtros.tipo) parametros.set('tipo', filtros.tipo);
+  if (filtros.periodo) parametros.set('periodo', filtros.periodo);
 
   try {
     const { itens, temMais } = await api(`/notificacoes?${parametros}`);
@@ -391,16 +480,29 @@ async function carregarNotificacoes(reiniciar = false) {
     estado.temMais = temMais;
     estado.proximoCursor = estado.notificacoes.at(-1)?.id || null;
 
-    lista.innerHTML = estado.notificacoes.map(linhaDoTempo).join('');
-
     if (!estado.notificacoes.length) {
-      lista.innerHTML = '';
-      areaMais.innerHTML = `<div class="vazio">Nenhuma notificação por aqui ainda.</div>`;
+      const filtrando = filtros.busca.trim() || filtros.tipo || filtros.periodo;
+      lista.innerHTML = `<div class="vazio">${
+        filtrando
+          ? 'Nada encontrado com esses filtros.'
+          : 'Nenhuma notificação por aqui ainda.'
+      }</div>`;
+      areaMais.innerHTML = '';
       return;
     }
 
+    lista.innerHTML = agruparPorDia(estado.notificacoes)
+      .map(
+        (grupo) => `
+        <section class="dia">
+          <h2 class="dia__titulo">${esc(grupo.rotulo)}</h2>
+          ${grupo.itens.map(cartaoAviso).join('')}
+        </section>`
+      )
+      .join('');
+
     areaMais.innerHTML = temMais
-      ? `<button type="button" class="botao" id="botao-mais" style="margin-top:8px">Carregar mais</button>`
+      ? `<button type="button" class="botao" id="botao-mais">Carregar mais</button>`
       : '';
     $('#botao-mais')?.addEventListener('click', () => carregarNotificacoes(false));
   } catch (erro) {
@@ -518,22 +620,41 @@ function telaEnviar(container) {
 
 /* ── Webhooks ──────────────────────────────────────────────── */
 
-function cartaoWebhook(w) {
-  // No modo direto o exemplo mostra o corpo que a ferramenta deve mandar;
-  // no modo modelo, os dados crus que alimentam as {{variaveis}}.
-  const corpo =
-    w.modo === 'direto'
-      ? `{
+/** Corpo de exemplo, no formato que o webhook espera. */
+function corpoExemplo(w) {
+  return w.modo === 'direto'
+    ? `{
   "titulo": "✅ Venda aprovada",
-  "texto": "A compra de Maria Souza foi confirmada.\\n\\n*Valor:* R$ 1.200,00",
+  "texto": "A compra de {{ $json.customer.name }} foi confirmada.\\n\\n*Valor:* R$ {{ $json.value }}",
   "tipo": "${w.tipo}"
 }`
-      : `{"nome":"Maria","telefone":"11 90000-0000"}`;
+    : `{
+  "nome": "Maria Souza",
+  "telefone": "11 90000-0000"
+}`;
+}
 
-  const exemplo = `curl -X POST ${w.endereco} \\
+function cartaoWebhook(w) {
+  const corpo = corpoExemplo(w);
+
+  const comoUsar =
+    w.modo === 'direto'
+      ? `<p class="dica"><b>No n8n</b>, use um nó <b>HTTP Request</b>:</p>
+         <ul class="passos">
+           <li><b>Method</b> POST · <b>URL</b> o endereço acima</li>
+           <li><b>Send Headers</b> ligado → <code>X-Chave-Secreta</code> = a chave acima</li>
+           <li><b>Send Body</b> ligado → <b>JSON</b> → <b>Using JSON</b></li>
+           <li>Cole o corpo abaixo e ligue a expressão <code>fx</code> no campo</li>
+         </ul>`
+      : `<p class="dica">
+           Mande o JSON cru do seu sistema. Os campos alimentam as
+           <code>{{variáveis}}</code> do modelo cadastrado.
+         </p>`;
+
+  const curl = `curl -X POST ${w.endereco} \\
   -H "X-Chave-Secreta: ${w.chave_secreta}" \\
   -H "Content-Type: application/json" \\
-  -d '${corpo}'`;
+  -d '${corpo.replace(/\n\s*/g, ' ')}'`;
 
   return `
     <li class="item" data-id="${w.id}">
@@ -550,7 +671,7 @@ function cartaoWebhook(w) {
           </div>
         </div>
         <div class="item__acoes">
-          <button class="botao botao--pequeno" data-acao="curl">Exemplo</button>
+          <button class="botao botao--pequeno" data-acao="usar">Como usar</button>
           <button class="botao botao--pequeno" data-acao="alternar">${w.ativo ? 'Desativar' : 'Ativar'}</button>
           <button class="botao botao--pequeno" data-acao="rotacionar">Nova chave</button>
           <button class="botao botao--pequeno botao--perigo" data-acao="excluir">Excluir</button>
@@ -558,21 +679,47 @@ function cartaoWebhook(w) {
       </div>
 
       <div class="copiavel">
+        <span class="copiavel__rotulo">URL</span>
         <code>${esc(w.endereco)}</code>
         <button class="botao botao--pequeno" data-acao="copiar-endereco">Copiar</button>
       </div>
       <div class="copiavel">
-        <code>Chave: ${esc(w.chave_secreta)}</code>
+        <span class="copiavel__rotulo">Chave</span>
+        <code>${esc(w.chave_secreta)}</code>
         <button class="botao botao--pequeno" data-acao="copiar-chave">Copiar</button>
       </div>
 
-      <pre class="dica" data-curl hidden style="margin-top:12px;white-space:pre-wrap">${esc(exemplo)}</pre>
+      <div class="instrucoes" data-usar hidden>
+        ${comoUsar}
+        <div class="bloco-codigo">
+          <div class="bloco-codigo__topo">
+            <span>Corpo da requisição</span>
+            <button class="botao botao--pequeno" data-acao="copiar-corpo">Copiar</button>
+          </div>
+          <pre>${esc(corpo)}</pre>
+        </div>
+        <div class="bloco-codigo">
+          <div class="bloco-codigo__topo">
+            <span>Ou teste pelo terminal</span>
+            <button class="botao botao--pequeno" data-acao="copiar-curl">Copiar</button>
+          </div>
+          <pre>${esc(curl)}</pre>
+        </div>
+      </div>
     </li>`;
 }
 
 async function telaWebhooks(container) {
   container.innerHTML = `
     <div class="bloco">
+      <ul class="lista" id="lista-webhooks"></ul>
+    </div>
+
+    <div class="bloco">
+      <button type="button" class="botao" id="abrir-novo">+ Novo gatilho</button>
+    </div>
+
+    <div class="bloco" id="area-novo" hidden>
       <h2>Novo gatilho</h2>
       <form class="formulario" id="form-webhook">
         <div class="linha">
@@ -614,19 +761,18 @@ async function telaWebhooks(container) {
           <p class="dica">
             Mande <code>titulo</code> e <code>texto</code> no corpo da chamada. O
             título é o que aparece na tela do celular; o texto completo fica no
-            histórico. Opcionalmente, <code>tipo</code> define a etiqueta
-            (<code>lead</code>, <code>alerta</code>, <code>meta</code>,
-            <code>aviso</code>).
+            histórico. Opcionalmente, <code>tipo</code> define a etiqueta.
+            Dentro do texto, <code>\\n</code> quebra a linha e
+            <code>*assim*</code> deixa em negrito.
           </p>
-          <pre class="dica" style="white-space:pre-wrap;margin-top:10px">{
+          <div class="bloco-codigo">
+            <div class="bloco-codigo__topo"><span>Exemplo de corpo</span></div>
+            <pre>{
   "titulo": "✅ Venda aprovada",
   "texto": "A compra de {{ $json.customer.name }} foi confirmada.\\n\\n*Valor:* R$ {{ $json.value }}",
   "tipo": "meta"
 }</pre>
-          <p class="dica" style="margin-top:8px">
-            Dentro do texto, <code>\\n</code> quebra a linha e <code>*assim*</code>
-            deixa em negrito no histórico.
-          </p>
+          </div>
         </div>
 
         <div id="campos-modelo" hidden>
@@ -651,16 +797,20 @@ async function telaWebhooks(container) {
         <p class="erro" id="erro-webhook" hidden></p>
         <button type="submit" class="botao botao--principal">Criar webhook</button>
       </form>
-    </div>
-
-    <div class="bloco">
-      <h2>Gatilhos ativos</h2>
-      <ul class="lista" id="lista-webhooks"></ul>
     </div>`;
 
   await carregarWebhooks();
 
   const form = $('#form-webhook');
+
+  // O formulário nasce fechado: no dia a dia a tela serve para consultar
+  // o endereço e a chave, não para criar gatilho.
+  $('#abrir-novo').addEventListener('click', (evento) => {
+    const area = $('#area-novo');
+    area.hidden = !area.hidden;
+    evento.target.textContent = area.hidden ? '+ Novo gatilho' : 'Cancelar';
+    if (!area.hidden) area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 
   // Mostra só o que interessa ao modo escolhido.
   const alternarModo = () => {
@@ -719,9 +869,14 @@ async function carregarWebhooks() {
     try {
       if (acao === 'copiar-endereco') return copiar(webhook.endereco, 'Endereço copiado');
       if (acao === 'copiar-chave') return copiar(webhook.chave_secreta, 'Chave copiada');
-      if (acao === 'curl') {
-        const bloco = item.querySelector('[data-curl]');
+      if (acao === 'copiar-corpo') return copiar(corpoExemplo(webhook), 'Corpo copiado');
+      if (acao === 'copiar-curl') {
+        return copiar(item.querySelectorAll('.bloco-codigo pre')[1].textContent, 'Comando copiado');
+      }
+      if (acao === 'usar') {
+        const bloco = item.querySelector('[data-usar]');
         bloco.hidden = !bloco.hidden;
+        botao.textContent = bloco.hidden ? 'Como usar' : 'Fechar';
         return;
       }
       if (acao === 'alternar') {
@@ -1188,7 +1343,6 @@ function manterAtualizado() {
     if (document.hidden) return;
     if (!location.hash.includes('historico') && location.hash !== '' && location.hash !== '#/')
       return;
-    carregarResumo();
     carregarNotificacoes(true);
   };
 

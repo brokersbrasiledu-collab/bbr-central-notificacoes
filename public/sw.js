@@ -15,8 +15,8 @@ const CASCA = [
   '/estilos.css',
   '/app.js',
   '/manifest.json',
-  '/icones/icone-192.png',
-  '/icones/icone-512.png',
+  '/icones/marca.png', // logo da interface
+  '/icones/icone-192.png', // usada na própria notificação
 ];
 
 // ── Ciclo de vida ───────────────────────────────────────────────

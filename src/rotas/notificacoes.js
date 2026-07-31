@@ -6,6 +6,7 @@ import { db } from '../db/index.js';
 import { TIPOS, LIMITE_TITULO, LIMITE_TEXTO } from '../config.js';
 import { exigirLogin, exigirNivel } from '../middlewares/auth.js';
 import { publicarNotificacao, aparelhosDoPublico } from '../servicos/push.js';
+import { inicioDoDiaUTC } from '../servicos/datas.js';
 
 export const rotasNotificacoes = Router();
 
@@ -15,13 +16,18 @@ export const rotasNotificacoes = Router();
  * Paginação por cursor (`antes=<id>`): mais estável que offset quando
  * chegam notificações novas enquanto o usuário rola a lista.
  */
+const PERIODOS = { hoje: 0, '7d': 6, '30d': 29 };
+
 rotasNotificacoes.get('/', exigirLogin, (req, res) => {
   const limite = Math.min(Math.max(Number(req.query.limite) || 30, 1), 100);
   const antes = Number(req.query.antes) || null;
   const tipo = TIPOS.includes(req.query.tipo) ? req.query.tipo : null;
+  const busca = String(req.query.busca || '').trim().slice(0, 80);
+  const periodo = Object.hasOwn(PERIODOS, req.query.periodo) ? req.query.periodo : null;
 
   const condicoes = [];
   const valores = [];
+
   if (antes) {
     condicoes.push('n.id < ?');
     valores.push(antes);
@@ -30,6 +36,18 @@ rotasNotificacoes.get('/', exigirLogin, (req, res) => {
     condicoes.push('n.tipo = ?');
     valores.push(tipo);
   }
+  if (busca) {
+    // Procura no título e no corpo: quem lembra de um trecho da mensagem
+    // acha do mesmo jeito. O escape evita que % e _ digitados virem curinga.
+    const termo = `%${busca.replace(/[%_\\]/g, '\\$&')}%`;
+    condicoes.push(`(n.titulo LIKE ? ESCAPE '\\' OR n.texto LIKE ? ESCAPE '\\')`);
+    valores.push(termo, termo);
+  }
+  if (periodo) {
+    condicoes.push('n.criada_em >= ?');
+    valores.push(inicioDoDiaUTC(PERIODOS[periodo]));
+  }
+
   const onde = condicoes.length ? `WHERE ${condicoes.join(' AND ')}` : '';
 
   const itens = db
