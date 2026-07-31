@@ -125,7 +125,9 @@ rotasNotificacoes.post('/enviar', exigirNivel('operador'), async (req, res) => {
  */
 rotasNotificacoes.get('/alcance', exigirNivel('operador'), (req, res) => {
   const publico = String(req.query.publico || 'todos');
-  res.json({ aparelhos: aparelhosDoPublico(publico).length });
+  // O tipo importa no cálculo: quem silenciou aquele tipo não entra na conta.
+  const tipo = TIPOS.includes(req.query.tipo) ? req.query.tipo : null;
+  res.json({ aparelhos: aparelhosDoPublico(publico, tipo).length });
 });
 
 /** Apagar uma linha do histórico — só admin. */

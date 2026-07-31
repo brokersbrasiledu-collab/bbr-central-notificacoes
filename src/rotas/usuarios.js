@@ -17,7 +17,9 @@ rotasUsuarios.get('/', (_req, res) => {
   const itens = db
     .prepare(
       `SELECT u.id, u.nome, u.email, u.nivel, u.ativo, u.criado_em, u.ultimo_acesso_em,
-              (SELECT COUNT(*) FROM aparelhos a WHERE a.usuario_id = u.id) AS aparelhos
+              (SELECT COUNT(*) FROM aparelhos a WHERE a.usuario_id = u.id) AS aparelhos,
+              -- Ajuda o admin a entender por que alguém não recebeu um aviso.
+              (SELECT COUNT(*) FROM preferencias_tipo p WHERE p.usuario_id = u.id) AS silenciados
          FROM usuarios u
         ORDER BY u.nivel = 'admin' DESC, u.nome COLLATE NOCASE`
     )

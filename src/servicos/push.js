@@ -31,17 +31,27 @@ export const vapidPronto = () => configurado;
  *   "admin" / "operador"...  → um ou mais níveis, separados por vírgula
  *   "usuarios:3,7"           → usuários específicos por id
  */
-export function aparelhosDoPublico(publico = 'todos') {
+export function aparelhosDoPublico(publico = 'todos', tipo = null) {
   const alvo = String(publico || 'todos').trim();
+
+  // Quem silenciou este tipo sai do envio. A notificação continua no
+  // histórico: o filtro é só do push, não do que o time consegue ver.
+  const semSilenciados = tipo
+    ? ` AND NOT EXISTS (
+          SELECT 1 FROM preferencias_tipo p
+           WHERE p.usuario_id = u.id AND p.tipo = @tipoSilenciado)`
+    : '';
 
   const base = `
     SELECT a.id, a.endpoint, a.p256dh, a.auth, a.usuario_id
       FROM aparelhos a
       JOIN usuarios u ON u.id = a.usuario_id
-     WHERE u.ativo = 1`;
+     WHERE u.ativo = 1${semSilenciados}`;
+
+  const comuns = tipo ? { tipoSilenciado: tipo } : {};
 
   if (alvo === 'todos' || alvo === '') {
-    return db.prepare(base).all();
+    return db.prepare(base).all(comuns);
   }
 
   if (alvo.startsWith('usuarios:')) {
@@ -51,8 +61,9 @@ export function aparelhosDoPublico(publico = 'todos') {
       .map((n) => Number(n.trim()))
       .filter(Number.isInteger);
     if (!ids.length) return [];
-    const marcadores = ids.map(() => '?').join(',');
-    return db.prepare(`${base} AND u.id IN (${marcadores})`).all(...ids);
+    const marcadores = ids.map((_, i) => `@id${i}`).join(',');
+    const params = Object.fromEntries(ids.map((v, i) => [`id${i}`, v]));
+    return db.prepare(`${base} AND u.id IN (${marcadores})`).all({ ...comuns, ...params });
   }
 
   const niveis = alvo
@@ -60,8 +71,9 @@ export function aparelhosDoPublico(publico = 'todos') {
     .map((n) => n.trim().toLowerCase())
     .filter((n) => ['admin', 'operador', 'membro'].includes(n));
   if (!niveis.length) return [];
-  const marcadores = niveis.map(() => '?').join(',');
-  return db.prepare(`${base} AND u.nivel IN (${marcadores})`).all(...niveis);
+  const marcadores = niveis.map((_, i) => `@nivel${i}`).join(',');
+  const params = Object.fromEntries(niveis.map((v, i) => [`nivel${i}`, v]));
+  return db.prepare(`${base} AND u.nivel IN (${marcadores})`).all({ ...comuns, ...params });
 }
 
 /** Remove do banco um aparelho cuja inscrição o serviço de push recusou. */
@@ -149,7 +161,7 @@ export async function publicarNotificacao({
     );
 
   const id = info.lastInsertRowid;
-  const aparelhos = aparelhosDoPublico(publico);
+  const aparelhos = aparelhosDoPublico(publico, tipo);
 
   let resultado = { entregues: 0, falhas: 0, removidos: 0 };
   if (aparelhos.length) {

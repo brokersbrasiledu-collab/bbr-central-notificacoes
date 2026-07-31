@@ -37,6 +37,22 @@ CREATE TABLE IF NOT EXISTS aparelhos (
 
 CREATE INDEX IF NOT EXISTS idx_aparelhos_usuario ON aparelhos(usuario_id);
 
+-- ── preferencias_tipo ───────────────────────────────────────────
+-- O que cada pessoa NÃO quer receber no celular.
+--
+-- Guardar o que está silenciado (em vez do que está ligado) mantém o
+-- padrão "recebe tudo": quem nunca abriu a tela de preferências, e quem
+-- entrar no time amanhã, continua recebendo sem precisar configurar nada.
+--
+-- Silenciar afeta só o push. A notificação continua no histórico, que é
+-- compartilhado por todo o time.
+CREATE TABLE IF NOT EXISTS preferencias_tipo (
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  tipo       TEXT    NOT NULL
+               CHECK (tipo IN ('lead', 'alerta', 'meta', 'aviso', 'sistema')),
+  PRIMARY KEY (usuario_id, tipo)
+);
+
 -- ── webhooks ────────────────────────────────────────────────────
 -- Gatilhos automáticos. Cada um tem um endereço único (slug), uma
 -- chave secreta e o modelo de mensagem com variáveis dinâmicas.

@@ -786,6 +786,69 @@ h2 {
   display: none;
 }
 
+/* ── Preferências de notificação ───────────────────────────── */
+
+.preferencia {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+}
+
+.preferencia__descricao {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--texto-suave);
+}
+
+/* Interruptor: a caixa real fica invisível, mas continua sendo ela que
+   recebe o toque e o foco do teclado. */
+.chave {
+  flex: none;
+  cursor: pointer;
+}
+
+.chave input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.chave__trilho {
+  display: block;
+  width: 46px;
+  height: 27px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--cinza);
+  transition: background var(--transicao);
+}
+
+.chave__bola {
+  display: block;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: var(--offwhite);
+  transition: transform var(--transicao);
+}
+
+.chave input:checked + .chave__trilho {
+  background: var(--ouro);
+}
+
+.chave input:checked + .chave__trilho .chave__bola {
+  transform: translateX(19px);
+  background: var(--preto);
+}
+
+.chave input:focus-visible + .chave__trilho {
+  outline: 2px solid var(--ouro);
+  outline-offset: 2px;
+}
+
 .selo-inativo {
   padding: 2px 8px;
   border-radius: 999px;

@@ -47,7 +47,7 @@ Quatro camadas:
 | --- | --- | --- |
 | **PWA** | Instala na tela inicial, pede permissão, mostra o histórico, recebe o push | `public/` |
 | **Backend** | Login, webhook, envio, histórico | `src/` |
-| **Banco** | Contas, aparelhos, webhooks, notificações | `src/db/schema.sql` |
+| **Banco** | Contas, aparelhos, webhooks, notificações, preferências | `src/db/schema.sql` |
 | **Push** | Ponte do Google e da Apple, via VAPID | biblioteca `web-push` |
 
 ---
@@ -264,6 +264,8 @@ Sessão em cookie `httpOnly`. Todas as respostas são JSON.
 | POST | `/api/push/inscrever` | logado | Registra o aparelho |
 | POST | `/api/push/desinscrever` | logado | Remove o aparelho |
 | GET | `/api/push/meus-aparelhos` | logado | Aparelhos da conta |
+| GET | `/api/push/preferencias` | logado | Tipos que a pessoa recebe |
+| POST | `/api/push/preferencias` | logado | Liga ou silencia um tipo |
 | POST | `/api/push/teste` | logado | Notificação de teste (não entra no histórico) |
 
 ### Notificações

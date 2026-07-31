@@ -11,6 +11,14 @@ import { enviarParaAparelhos, vapidPronto } from '../servicos/push.js';
 export const rotasPush = Router();
 
 /**
+ * Tipos que a pessoa pode silenciar.
+ *
+ * "sistema" fica de fora: é o canal dos testes e dos avisos do próprio
+ * app. Se desse para silenciar, o botão "enviar teste" pareceria quebrado.
+ */
+const TIPOS_ESCOLHIVEIS = ['lead', 'alerta', 'meta', 'aviso'];
+
+/**
  * O navegador precisa da chave pública VAPID para criar a subscription.
  * É pública por definição — pode ser servida sem login.
  */
@@ -69,6 +77,50 @@ rotasPush.post('/desinscrever', exigirLogin, (req, res) => {
     req.usuario.id
   );
   res.json({ ok: true });
+});
+
+/**
+ * Preferências de notificação do próprio usuário.
+ *
+ * A resposta lista os tipos LIGADOS, que é como a interface pensa. No
+ * banco guardamos o contrário (os silenciados), para que "recebe tudo"
+ * seja o estado natural de quem nunca mexeu nisso.
+ */
+rotasPush.get('/preferencias', exigirLogin, (req, res) => {
+  const silenciados = db
+    .prepare('SELECT tipo FROM preferencias_tipo WHERE usuario_id = ?')
+    .all(req.usuario.id)
+    .map((linha) => linha.tipo);
+
+  res.json({
+    tipos: TIPOS_ESCOLHIVEIS.map((tipo) => ({
+      tipo,
+      ativo: !silenciados.includes(tipo),
+    })),
+  });
+});
+
+/** Liga ou desliga um tipo para o usuário logado. */
+rotasPush.post('/preferencias', exigirLogin, (req, res) => {
+  const tipo = req.body?.tipo;
+  const ativo = req.body?.ativo !== false;
+
+  if (!TIPOS_ESCOLHIVEIS.includes(tipo)) {
+    return res.status(400).json({ erro: 'Tipo de notificação inválido.' });
+  }
+
+  if (ativo) {
+    db.prepare('DELETE FROM preferencias_tipo WHERE usuario_id = ? AND tipo = ?').run(
+      req.usuario.id,
+      tipo
+    );
+  } else {
+    db.prepare(
+      'INSERT OR IGNORE INTO preferencias_tipo (usuario_id, tipo) VALUES (?, ?)'
+    ).run(req.usuario.id, tipo);
+  }
+
+  res.json({ ok: true, tipo, ativo });
 });
 
 /** Aparelhos do próprio usuário — mostrado na tela de ativação. */

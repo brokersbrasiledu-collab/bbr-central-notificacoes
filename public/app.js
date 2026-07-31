@@ -560,15 +560,21 @@ function telaEnviar(container) {
   const form = $('#form-enviar');
   const alcance = $('#alcance');
 
-  /** Mostra quantos aparelhos serão atingidos pelo público escolhido. */
+  /**
+   * Quantos aparelhos serão atingidos.
+   * Depende do público E do tipo, já que cada pessoa pode ter silenciado
+   * tipos que não quer receber.
+   */
   async function atualizarAlcance() {
     try {
-      const { aparelhos } = await api(
-        `/notificacoes/alcance?publico=${encodeURIComponent(form.publico.value)}`
-      );
+      const consulta = new URLSearchParams({
+        publico: form.publico.value,
+        tipo: form.tipo.value,
+      });
+      const { aparelhos } = await api(`/notificacoes/alcance?${consulta}`);
       alcance.textContent =
         aparelhos === 0
-          ? 'Nenhum aparelho ativo neste público — a notificação vai só para o histórico.'
+          ? 'Nenhum aparelho vai receber — a notificação entra só no histórico.'
           : `Chega em ${aparelhos} aparelho${aparelhos > 1 ? 's' : ''} agora.`;
     } catch {
       alcance.textContent = '';
@@ -576,6 +582,7 @@ function telaEnviar(container) {
   }
 
   form.publico.addEventListener('change', atualizarAlcance);
+  form.tipo.addEventListener('change', atualizarAlcance);
   atualizarAlcance();
 
   form.addEventListener('submit', async (evento) => {
@@ -918,6 +925,7 @@ function cartaoUsuario(u, eu) {
           <div class="item__meta">
             <span>${esc(u.email)}</span>
             <span>${u.aparelhos} aparelho(s)</span>
+            ${u.silenciados ? `<span>${u.silenciados} tipo(s) silenciado(s)</span>` : ''}
             <span>${u.ultimo_acesso_em ? `entrou ${esc(quando(u.ultimo_acesso_em))}` : 'nunca entrou'}</span>
           </div>
         </div>
@@ -1044,6 +1052,61 @@ async function carregarUsuarios() {
 
 /* ── Este aparelho ─────────────────────────────────────────── */
 
+/** Descrição de cada tipo, para a pessoa saber o que está desligando. */
+const DESCRICAO_TIPO = {
+  lead: 'Lead novo caindo no funil',
+  meta: 'Venda aprovada e meta batida',
+  alerta: 'Automação parada e erros',
+  aviso: 'Comunicados do time',
+};
+
+async function carregarPreferencias() {
+  const lista = $('#lista-preferencias');
+  if (!lista) return;
+
+  try {
+    const { tipos } = await api('/push/preferencias');
+
+    lista.innerHTML = tipos
+      .map(
+        ({ tipo, ativo }) => `
+        <li class="item preferencia">
+          <div>
+            <span class="etiqueta etiqueta--${esc(tipo)}">${esc(ROTULO_TIPO[tipo] || tipo)}</span>
+            <p class="preferencia__descricao">${esc(DESCRICAO_TIPO[tipo] || '')}</p>
+          </div>
+          <label class="chave" title="${ativo ? 'Recebendo' : 'Silenciado'}">
+            <input type="checkbox" data-tipo="${esc(tipo)}" ${ativo ? 'checked' : ''} />
+            <span class="chave__trilho"><span class="chave__bola"></span></span>
+          </label>
+        </li>`
+      )
+      .join('');
+
+    lista.onchange = async (evento) => {
+      const caixa = evento.target.closest('input[data-tipo]');
+      if (!caixa) return;
+      try {
+        await api('/push/preferencias', {
+          metodo: 'POST',
+          corpo: { tipo: caixa.dataset.tipo, ativo: caixa.checked },
+        });
+        avisar(
+          caixa.checked
+            ? `Você voltará a receber "${ROTULO_TIPO[caixa.dataset.tipo]}".`
+            : `"${ROTULO_TIPO[caixa.dataset.tipo]}" silenciado neste celular.`,
+          'ok'
+        );
+      } catch (erro) {
+        caixa.checked = !caixa.checked; // desfaz visualmente se o servidor recusou
+        avisar(erro.message, 'erro');
+      }
+    };
+  } catch {
+    lista.innerHTML = '';
+  }
+}
+
 async function telaAparelho(container) {
   const situacao = !ambiente.suportaPush
     ? ambiente.ehIOS && !ambiente.instalado
@@ -1082,6 +1145,15 @@ async function telaAparelho(container) {
     </div>
 
     <div class="bloco">
+      <h2>O que você quer receber</h2>
+      <p class="dica">
+        Desligar um tipo silencia o push no seu celular. A notificação continua
+        aparecendo no histórico — isso muda só o que te interrompe.
+      </p>
+      <ul class="lista" id="lista-preferencias"></ul>
+    </div>
+
+    <div class="bloco">
       <h2>Aparelhos inscritos na sua conta</h2>
       <ul class="lista" id="lista-aparelhos"></ul>
     </div>
@@ -1116,6 +1188,8 @@ async function telaAparelho(container) {
       avisar(e.message, 'erro');
     }
   });
+
+  await carregarPreferencias();
 
   try {
     const { aparelhos } = await api('/push/meus-aparelhos');
