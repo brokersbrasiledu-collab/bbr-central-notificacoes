@@ -27,7 +27,9 @@ USER node
 EXPOSE 3000
 
 # O Portainer mostra este estado como "healthy" na lista de containers.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+# A folga de 45s na partida evita que uma VPS ocupada marque o serviço como
+# doente antes de ele terminar de subir — o Swarm reiniciaria em looping.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/saude').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "src/server.js"]

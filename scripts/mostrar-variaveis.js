@@ -49,7 +49,11 @@ const segredo =
 const apenasHost = dominio.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
 
 const linhas = [
-  ['IMAGEM', process.env.IMAGEM || 'ghcr.io/SEU-USUARIO/bbr-central-notificacoes:latest'],
+  [
+    'IMAGEM',
+    process.env.IMAGEM ||
+      'ghcr.io/brokersbrasiledu-collab/bbr-central-notificacoes:latest',
+  ],
   ['APP_URL', dominio],
   ['DOMINIO', apenasHost],
   ['JWT_SECRET', segredo],
