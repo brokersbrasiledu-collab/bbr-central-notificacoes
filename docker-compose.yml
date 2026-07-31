@@ -1,29 +1,31 @@
 # ════════════════════════════════════════════════════════════════
 # Central de Notificações Push — Brokers Brasil
-# Stack para o Portainer.
+# Stack para Portainer em Docker Swarm, publicada por Traefik.
 #
 # Este arquivo não encosta em nada que já roda na VPS: cria um
-# container próprio, um volume próprio e usa uma porta só dele.
+# serviço próprio e um volume próprio, e só usa a rede AutoNet que
+# já existe. A stack do Traefik NÃO precisa ser alterada — ele
+# descobre este serviço sozinho, pelas labels em "deploy.labels".
 #
-# Como usar: Portainer → Stacks → Add stack → Repository
+# Como usar: Portainer → Stacks → Add stack → Web editor
 # (o passo a passo completo está no arquivo PORTAINER.md)
 # ════════════════════════════════════════════════════════════════
+version: '3.8'
 
 services:
   bbr-push:
-    build: .
-    image: bbr-push:1.0.0
-    container_name: bbr-push
-    restart: unless-stopped
+    # O Swarm não compila imagem: ela vem pronta do GitHub Container
+    # Registry, publicada automaticamente a cada atualização do código.
+    image: ${IMAGEM}
 
     environment:
       # ── Fixos: não precisa mexer ──────────────────────────────
       NODE_ENV: production
       PORT: 3000
       DB_PATH: /dados/central.db
-      TRUST_PROXY: 1 # o proxy da frente entrega o IP real
+      TRUST_PROXY: 1 # o Traefik entrega o IP real do visitante
 
-      # ── Preencha no painel do Portainer ───────────────────────
+      # ── Preenchidos no painel do Portainer ────────────────────
       APP_URL: ${APP_URL}
       JWT_SECRET: ${JWT_SECRET}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
@@ -38,18 +40,64 @@ services:
       # trocar a versão do app NÃO apaga contas, aparelhos nem histórico.
       - bbr-dados:/dados
 
-    # Porta só desta aplicação. Se a 3000 já estiver ocupada na sua VPS,
-    # troque apenas o número da ESQUERDA (ex.: "3210:3000").
-    ports:
-      - '3000:3000'
+    networks:
+      - AutoNet
 
-    # ── Se o seu proxy (Nginx Proxy Manager, Traefik) roda em Docker ──
-    # Descomente os dois blocos "networks" abaixo e troque o nome pela
-    # rede que o proxy usa. Aí ele alcança este container pelo nome
-    # "bbr-push" na porta 3000, e você pode até remover o bloco "ports".
-    #
-    # networks:
-    #   - proxy
+    deploy:
+      # Réplica ÚNICA, e isso não é opcional: o banco é um arquivo SQLite.
+      # Duas réplicas escreveriam no mesmo arquivo e o corromperiam.
+      mode: replicated
+      replicas: 1
+
+      placement:
+        constraints:
+          # Prende o serviço ao nó gerente. O volume é local ao nó, então
+          # o serviço precisa voltar sempre no mesmo lugar para reencontrar
+          # o banco.
+          - node.role == manager
+
+      update_config:
+        # Derruba o container antigo ANTES de subir o novo — nunca dois
+        # ao mesmo tempo em cima do arquivo do banco.
+        order: stop-first
+        failure_action: rollback
+        delay: 5s
+
+      restart_policy:
+        condition: any
+        delay: 10s
+
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          memory: 128M
+
+      # ── Instruções para o Traefik ─────────────────────────────
+      # Em Swarm, as labels precisam ficar AQUI dentro de "deploy".
+      # Se ficarem no nível do serviço, o Traefik não enxerga e o
+      # site responde 404.
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=AutoNet
+
+        # Qual endereço responde por este app
+        - traefik.http.routers.bbrpush.rule=Host(`${DOMINIO}`)
+        - traefik.http.routers.bbrpush.entrypoints=websecure
+
+        # HTTPS com certificado automático.
+        # O redirecionamento de http para https já é global no seu Traefik.
+        - traefik.http.routers.bbrpush.tls=true
+        - traefik.http.routers.bbrpush.tls.certresolver=letsencryptresolver
+
+        # Porta interna do container. Em Swarm este rótulo é obrigatório:
+        # o Traefik não descobre a porta sozinho.
+        - traefik.http.services.bbrpush.loadbalancer.server.port=3000
+
+        # Manda o navegador só voltar por HTTPS.
+        - traefik.http.middlewares.bbrpush-hsts.headers.stsSeconds=31536000
+        - traefik.http.routers.bbrpush.middlewares=bbrpush-hsts
 
     logging:
       driver: json-file
@@ -60,7 +108,8 @@ services:
 volumes:
   bbr-dados:
     name: bbr-push-dados
-# networks:
-#   proxy:
-#     external: true
-#     name: NOME-DA-REDE-DO-SEU-PROXY
+
+networks:
+  AutoNet:
+    external: true
+    name: AutoNet

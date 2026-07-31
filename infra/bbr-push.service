@@ -1,0 +1,47 @@
+# Serviço systemd da Central de Notificações — Brokers Brasil
+#
+#   cp infra/bbr-push.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now bbr-push
+
+[Unit]
+Description=Central de Notificacoes Push - Brokers Brasil
+Documentation=file:/opt/bbr-push/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bbrpush
+Group=bbrpush
+WorkingDirectory=/opt/bbr-push
+ExecStart=/usr/bin/node src/server.js
+EnvironmentFile=/opt/bbr-push/.env
+
+# Reinicia sozinho se cair, com trava contra loop de reinício
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Logs vão para o journald: journalctl -u bbr-push -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bbr-push
+
+# ── Isolamento ────────────────────────────────────────────────
+# O processo só enxerga o que precisa: o código e a pasta do banco.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/bbr-push
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

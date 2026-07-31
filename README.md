@@ -296,12 +296,14 @@ Sessão em cookie `httpOnly`. Todas as respostas são JSON.
 > **Regra única: sem HTTPS o push não funciona.** Navegadores só registram service worker
 > em contexto seguro.
 
-> ### Já usa Portainer? Vá por [PORTAINER.md](PORTAINER.md)
+> ### Já usa Portainer com Traefik? Vá por [PORTAINER.md](PORTAINER.md)
 >
 > Se a VPS já roda outros serviços, o caminho por Docker é mais seguro e quase todo por
-> painel: o app vira um container isolado, com volume e porta próprios, sem tocar em nada
-> que já está no ar. Os arquivos [Dockerfile](Dockerfile) e
-> [docker-compose.yml](docker-compose.yml) já estão prontos.
+> painel: o app vira um serviço isolado, com volume próprio, sem tocar em nada que já está
+> no ar. Já vêm prontos o [Dockerfile](Dockerfile), o
+> [docker-compose.yml](docker-compose.yml) para Docker Swarm com labels de Traefik, e o
+> [fluxo do GitHub Actions](.github/workflows/publicar-imagem.yml) que publica a imagem —
+> necessário porque o Swarm não compila imagem, só baixa.
 >
 > A instalação manual abaixo é para uma VPS limpa, dedicada a este app.
 

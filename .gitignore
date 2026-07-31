@@ -1,0 +1,12 @@
+node_modules/
+.env
+dados/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.DS_Store
+npm-debug.log*
+
+# Configuração local do editor
+.claude/

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1"
+    />
+    <title>Central de Notificações — Brokers Brasil</title>
+    <meta
+      name="description"
+      content="Avisos de lead recebido, automação parada e comunicados do time, em um lugar só."
+    />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#141414" />
+    <link rel="icon" href="/icones/favicon-32.png" sizes="32x32" />
+
+    <!-- iOS: necessário para o app abrir em tela cheia quando salvo na tela inicial -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="BBR Avisos" />
+    <link rel="apple-touch-icon" href="/icones/apple-touch-icon.png" />
+
+    <link rel="stylesheet" href="/estilos.css" />
+  </head>
+
+  <body>
+    <!-- ── Tela de login ─────────────────────────────────────── -->
+    <div id="tela-login" class="tela-login" hidden>
+      <form id="form-login" class="cartao-login" autocomplete="on">
+        <div class="marca marca--grande">
+          <span class="marca__selo">B</span>
+          <div>
+            <strong>Brokers Brasil</strong>
+            <span>Central de Notificações</span>
+          </div>
+        </div>
+
+        <label class="campo">
+          <span>E-mail</span>
+          <input
+            type="email"
+            name="email"
+            autocomplete="username"
+            inputmode="email"
+            required
+            placeholder="voce@brokersbrasil.com.br"
+          />
+        </label>
+
+        <label class="campo">
+          <span>Senha</span>
+          <input
+            type="password"
+            name="senha"
+            autocomplete="current-password"
+            required
+            placeholder="••••••••"
+          />
+        </label>
+
+        <p id="erro-login" class="erro" hidden></p>
+        <button type="submit" class="botao botao--principal">Entrar</button>
+      </form>
+    </div>
+
+    <!-- ── Aplicativo ────────────────────────────────────────── -->
+    <div id="app" class="app" hidden>
+      <!-- Barra lateral esquerda: navegação + o botão discreto de sair -->
+      <nav class="lateral" aria-label="Navegação principal">
+        <div class="marca">
+          <span class="marca__selo">B</span>
+          <div class="marca__texto">
+            <strong>Brokers Brasil</strong>
+            <span>Notificações</span>
+          </div>
+        </div>
+
+        <ul class="lateral__menu" id="menu"></ul>
+
+        <div class="lateral__rodape">
+          <div class="usuario" id="usuario-atual">
+            <span class="usuario__nome"></span>
+            <span class="usuario__nivel"></span>
+          </div>
+          <button
+            type="button"
+            class="botao-sair"
+            id="botao-sair"
+            title="Sair da conta"
+            aria-label="Sair da conta"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" />
+              <path d="M10 17l-5-5 5-5" />
+              <path d="M5 12h11" />
+            </svg>
+            <span>Sair</span>
+          </button>
+        </div>
+      </nav>
+
+      <!-- Conteúdo -->
+      <main class="conteudo">
+        <!-- Faixa de ativação de notificações (some quando tudo estiver ok) -->
+        <div id="faixa-permissao" class="faixa" hidden></div>
+
+        <header class="cabecalho">
+          <div>
+            <h1 id="titulo-tela">Histórico</h1>
+            <p id="subtitulo-tela" class="subtitulo"></p>
+          </div>
+          <div id="acoes-tela" class="cabecalho__acoes"></div>
+        </header>
+
+        <div id="tela" class="tela"></div>
+      </main>
+    </div>
+
+    <!-- Avisos rápidos (toast) -->
+    <div id="avisos" class="avisos" aria-live="polite"></div>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

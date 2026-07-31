@@ -1,0 +1,861 @@
+/* ════════════════════════════════════════════════════════════════
+   Central de Notificações — Brokers Brasil
+   Preto como base, ouro só como acento, muito respiro entre blocos.
+   ════════════════════════════════════════════════════════════════ */
+
+:root {
+  --preto: #141414;
+  --ouro: #b0a473;
+  --offwhite: #e4e5de;
+  --cinza: #424242;
+
+  /* Superfícies derivadas da paleta — nada de cor nova */
+  --superficie: #191919;
+  --superficie-alta: #1f1f1f;
+  --borda: rgba(228, 229, 222, 0.09);
+  --borda-forte: rgba(228, 229, 222, 0.16);
+  --texto: var(--offwhite);
+  --texto-suave: rgba(228, 229, 222, 0.58);
+  --texto-fraco: rgba(228, 229, 222, 0.36);
+  --ouro-tenue: rgba(176, 164, 115, 0.12);
+  --vermelho: #c96a5c;
+  --verde: #7f9a72;
+
+  --raio: 10px;
+  --raio-g: 16px;
+  --lateral-largura: 232px;
+  --transicao: 160ms ease;
+
+  --fonte: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--preto);
+  color: var(--texto);
+  font-family: var(--fonte);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* O atributo hidden precisa vencer os display: grid/flex declarados
+   abaixo — sem isto, login e app apareceriam empilhados na mesma tela. */
+[hidden] {
+  display: none !important;
+}
+
+svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+::selection {
+  background: var(--ouro);
+  color: var(--preto);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ouro);
+  outline-offset: 2px;
+}
+
+/* ── Marca ─────────────────────────────────────────────────── */
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.marca__selo {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ouro);
+  border-radius: var(--raio);
+  color: var(--ouro);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.marca__texto strong,
+.marca > div > strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.marca__texto span,
+.marca > div > span {
+  display: block;
+  font-size: 12px;
+  color: var(--texto-fraco);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.marca--grande {
+  margin-bottom: 34px;
+}
+
+.marca--grande .marca__selo {
+  width: 46px;
+  height: 46px;
+  font-size: 23px;
+}
+
+/* ── Login ─────────────────────────────────────────────────── */
+
+.tela-login {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+}
+
+.cartao-login {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.campo > span {
+  font-size: 12px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--texto-fraco);
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  transition: border-color var(--transicao), background var(--transicao);
+  appearance: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--texto-fraco);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--ouro);
+  background: var(--superficie-alta);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 96px;
+  line-height: 1.5;
+}
+
+select {
+  background-image: linear-gradient(45deg, transparent 50%, var(--texto-suave) 50%),
+    linear-gradient(135deg, var(--texto-suave) 50%, transparent 50%);
+  background-position: calc(100% - 19px) 50%, calc(100% - 14px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 38px;
+}
+
+/* ── Botões ────────────────────────────────────────────────── */
+
+.botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 18px;
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio);
+  background: transparent;
+  color: var(--texto);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transicao);
+  white-space: nowrap;
+}
+
+.botao:hover:not(:disabled) {
+  border-color: var(--ouro);
+  color: var(--ouro);
+}
+
+.botao:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Ouro como acento: preenchido só no botão que importa na tela. */
+.botao--principal {
+  background: var(--ouro);
+  border-color: var(--ouro);
+  color: var(--preto);
+  font-weight: 600;
+}
+
+.botao--principal:hover:not(:disabled) {
+  background: #c0b482;
+  border-color: #c0b482;
+  color: var(--preto);
+}
+
+.botao--perigo:hover:not(:disabled) {
+  border-color: var(--vermelho);
+  color: var(--vermelho);
+}
+
+.botao--pequeno {
+  padding: 7px 12px;
+  font-size: 13px;
+}
+
+.botao--texto {
+  border-color: transparent;
+  padding: 6px 8px;
+  color: var(--texto-suave);
+}
+
+/* ── Estrutura ─────────────────────────────────────────────── */
+
+.app {
+  display: grid;
+  grid-template-columns: var(--lateral-largura) 1fr;
+  min-height: 100dvh;
+}
+
+.lateral {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  padding: 26px 18px calc(22px + env(safe-area-inset-bottom));
+  border-right: 1px solid var(--borda);
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+}
+
+.lateral__menu {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.lateral__menu button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--raio);
+  background: transparent;
+  color: var(--texto-suave);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transicao);
+}
+
+.lateral__menu button:hover {
+  background: rgba(228, 229, 222, 0.04);
+  color: var(--texto);
+}
+
+.lateral__menu button[aria-current='page'] {
+  background: var(--ouro-tenue);
+  color: var(--ouro);
+}
+
+.lateral__rodape {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--borda);
+}
+
+.usuario {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.usuario__nome {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usuario__nivel {
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ouro);
+}
+
+/* Botão discreto de sair — presente, mas sem puxar atenção. */
+.botao-sair {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--raio);
+  background: transparent;
+  color: var(--texto-fraco);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transicao);
+}
+
+.botao-sair:hover {
+  background: rgba(228, 229, 222, 0.04);
+  color: var(--texto);
+}
+
+.botao-sair svg {
+  width: 17px;
+  height: 17px;
+}
+
+.conteudo {
+  padding: 34px 38px calc(46px + env(safe-area-inset-bottom));
+  max-width: 900px;
+  width: 100%;
+}
+
+.cabecalho {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+h1 {
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.subtitulo {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--texto-suave);
+}
+
+.cabecalho__acoes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+h2 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ── Faixa de ativação / avisos fixos ──────────────────────── */
+
+.faixa {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 15px 18px;
+  margin-bottom: 26px;
+  border: 1px solid rgba(176, 164, 115, 0.32);
+  border-left: 2px solid var(--ouro);
+  border-radius: var(--raio);
+  background: var(--ouro-tenue);
+}
+
+.faixa__texto {
+  flex: 1;
+  min-width: 220px;
+  font-size: 14px;
+}
+
+.faixa__texto strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--ouro);
+  font-weight: 600;
+}
+
+.faixa__texto span {
+  color: var(--texto-suave);
+}
+
+.faixa ol {
+  margin: 8px 0 0 18px;
+  font-size: 13.5px;
+  color: var(--texto-suave);
+}
+
+.faixa ol li {
+  margin-bottom: 3px;
+}
+
+/* ── Cartões e blocos ──────────────────────────────────────── */
+
+.cartao {
+  padding: 20px;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-g);
+  background: var(--superficie);
+}
+
+.bloco {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bloco + .bloco {
+  margin-top: 30px;
+}
+
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 560px;
+}
+
+.linha {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.dica {
+  font-size: 12.5px;
+  color: var(--texto-fraco);
+  line-height: 1.5;
+}
+
+.dica code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(228, 229, 222, 0.07);
+  color: var(--ouro);
+  font-size: 12px;
+}
+
+.erro {
+  padding: 10px 13px;
+  border-radius: var(--raio);
+  border: 1px solid rgba(201, 106, 92, 0.4);
+  background: rgba(201, 106, 92, 0.1);
+  color: var(--vermelho);
+  font-size: 13.5px;
+}
+
+.vazio {
+  padding: 52px 20px;
+  text-align: center;
+  color: var(--texto-fraco);
+  font-size: 14px;
+  border: 1px dashed var(--borda);
+  border-radius: var(--raio-g);
+}
+
+/* ── Linha do tempo ────────────────────────────────────────── */
+
+.resumo {
+  display: flex;
+  gap: 28px;
+  padding-bottom: 22px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--borda);
+  flex-wrap: wrap;
+}
+
+.resumo__item strong {
+  display: block;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ouro);
+  line-height: 1.2;
+}
+
+.resumo__item span {
+  font-size: 11.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--texto-fraco);
+}
+
+.tempo {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A linha vertical fina em ouro é o único ornamento da timeline. */
+.tempo__item {
+  position: relative;
+  padding: 0 0 26px 26px;
+  border-left: 1px solid var(--borda);
+}
+
+.tempo__item:last-child {
+  border-left-color: transparent;
+  padding-bottom: 6px;
+}
+
+.tempo__item::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cinza);
+  border: 1px solid var(--preto);
+}
+
+.tempo__item--lead::before,
+.tempo__item--meta::before {
+  background: var(--ouro);
+}
+
+.tempo__item--alerta::before {
+  background: var(--vermelho);
+}
+
+.tempo__cabeca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 5px;
+}
+
+.tempo__titulo {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.tempo__texto {
+  color: var(--texto-suave);
+  font-size: 14px;
+}
+
+.tempo__meta {
+  margin-top: 7px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--texto-fraco);
+}
+
+.etiqueta {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--borda-forte);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+
+.etiqueta--lead,
+.etiqueta--meta {
+  border-color: rgba(176, 164, 115, 0.45);
+  color: var(--ouro);
+}
+
+.etiqueta--alerta {
+  border-color: rgba(201, 106, 92, 0.45);
+  color: var(--vermelho);
+}
+
+/* ── Listas de configuração (webhooks, acessos) ────────────── */
+
+.lista {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item {
+  padding: 18px 20px;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-g);
+  background: var(--superficie);
+}
+
+.item__topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.item__nome {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.item__acoes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Sem isto o select herdaria o width: 100% dos campos de formulário. */
+.item__acoes select {
+  width: auto;
+  min-width: 168px;
+  padding: 7px 34px 7px 12px;
+  font-size: 13px;
+  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+}
+
+.item__meta {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--texto-fraco);
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* Campo de endereço/chave para copiar */
+.copiavel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--preto);
+}
+
+.copiavel code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--texto-suave);
+  scrollbar-width: none;
+}
+
+.copiavel code::-webkit-scrollbar {
+  display: none;
+}
+
+.selo-inativo {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(228, 229, 222, 0.07);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texto-fraco);
+}
+
+/* ── Avisos rápidos ────────────────────────────────────────── */
+
+.avisos {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 50;
+  pointer-events: none;
+  width: min(420px, calc(100vw - 32px));
+}
+
+.aviso {
+  padding: 12px 16px;
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio);
+  background: var(--superficie-alta);
+  font-size: 13.5px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  animation: subir 200ms ease;
+}
+
+.aviso--erro {
+  border-color: rgba(201, 106, 92, 0.5);
+  color: var(--vermelho);
+}
+
+.aviso--ok {
+  border-color: rgba(176, 164, 115, 0.5);
+  color: var(--ouro);
+}
+
+@keyframes subir {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ── Celular ───────────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+
+  /* No celular a lateral vira barra inferior, sem perder o botão de sair. */
+  .lateral {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-top: 1px solid var(--borda);
+    background: rgba(20, 20, 20, 0.96);
+    backdrop-filter: blur(12px);
+    z-index: 40;
+  }
+
+  .lateral > .marca {
+    display: none;
+  }
+
+  .lateral__menu {
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 0;
+  }
+
+  .lateral__menu button {
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px 4px;
+    font-size: 10.5px;
+    text-align: center;
+    justify-content: center;
+  }
+
+  .lateral__menu button[aria-current='page'] {
+    background: transparent;
+  }
+
+  .lateral__rodape {
+    flex-direction: row;
+    align-items: center;
+    padding-top: 0;
+    padding-left: 8px;
+    border-top: 0;
+    border-left: 1px solid var(--borda);
+  }
+
+  .usuario {
+    display: none;
+  }
+
+  .botao-sair {
+    flex-direction: column;
+    gap: 3px;
+    font-size: 10.5px;
+    padding: 6px 4px;
+  }
+
+  .conteudo {
+    padding: 24px 20px 110px;
+  }
+
+  .cabecalho {
+    margin-bottom: 24px;
+  }
+
+  h1 {
+    font-size: 22px;
+  }
+
+  .linha {
+    grid-template-columns: 1fr;
+  }
+
+  .resumo {
+    gap: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

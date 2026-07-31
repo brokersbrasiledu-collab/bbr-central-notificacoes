@@ -1,0 +1,68 @@
+# ════════════════════════════════════════════════════════════════
+# Constrói a imagem do app e publica no GitHub Container Registry.
+#
+# Existe porque o Docker Swarm não compila imagem: ele só sabe baixar
+# uma que já esteja pronta num registro. Este processo roda sozinho no
+# GitHub — você não precisa ter Docker instalado nem compilar nada.
+#
+# Dispara a cada envio de arquivo para o branch principal, e também
+# pelo botão "Run workflow" na aba Actions.
+# ════════════════════════════════════════════════════════════════
+name: Publicar imagem
+
+on:
+  push:
+    branches: [main, master]
+    # Mudança só de documentação não precisa reconstruir a imagem.
+    paths-ignore:
+      - '**.md'
+      - 'infra/**'
+  workflow_dispatch:
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write # necessário para publicar no ghcr.io
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      # O ghcr.io só aceita nome de imagem em minúsculas, e o nome de
+      # usuário do GitHub pode ter maiúsculas.
+      - name: Montar o nome da imagem
+        id: nome
+        run: echo "imagem=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Preparar o Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Entrar no registro
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }} # o GitHub gera sozinho
+
+      - name: Construir e publicar
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # A VPS é x86, então a imagem é construída para essa arquitetura.
+          platforms: linux/amd64
+          tags: |
+            ${{ steps.nome.outputs.imagem }}:latest
+            ${{ steps.nome.outputs.imagem }}:${{ github.sha }}
+          # Cache entre execuções: o segundo build leva segundos.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Endereço da imagem
+        run: |
+          echo "::notice title=Imagem publicada::${{ steps.nome.outputs.imagem }}:latest"
+          echo "Use este valor na variável IMAGEM do Portainer:"
+          echo "  ${{ steps.nome.outputs.imagem }}:latest"

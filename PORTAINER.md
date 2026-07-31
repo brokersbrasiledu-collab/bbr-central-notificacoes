@@ -1,19 +1,50 @@
 # Subir na VPS pelo Portainer
 
-Guia visual, sem comando no servidor. Se em algum momento você travar, pare
-naquele passo e me avise — não tente adivinhar.
+Guia visual para a **sua** VPS: Docker Swarm, Traefik na rede `AutoNet` e
+Portainer. Se travar em algum passo, pare ali e me avise — não tente adivinhar.
 
-**Nada aqui encosta no que já roda na sua VPS.** O app vira um container
-separado, com volume separado e porta separada. Se der errado, você apaga a
-stack e a VPS fica exatamente como estava.
+**Nada aqui encosta no que já roda na sua VPS.** O app vira um serviço separado,
+com volume separado. A stack do Traefik não é alterada em momento nenhum: ele
+descobre o app sozinho. Se der errado, você remove a stack e a VPS fica
+exatamente como estava.
 
-**Tempo estimado:** 20 a 30 minutos.
+**Tempo estimado:** 30 a 40 minutos, quase tudo esperando build.
+
+---
+
+## O que já está resolvido
+
+Li o CMD do seu Traefik e configurei tudo com os seus valores:
+
+| | Valor da sua VPS |
+| --- | --- |
+| Rede | `AutoNet` |
+| Entrypoint HTTPS | `websecure` |
+| Certificado | `letsencryptresolver` |
+| Redirecionar http → https | já é global no seu Traefik |
+
+Você não precisa preencher nada disso.
+
+---
+
+## Uma diferença importante do Swarm
+
+Seu ambiente é **Docker Swarm**, e o Swarm **não compila imagem** — ele só sabe
+baixar uma imagem já pronta. Por isso o caminho tem uma etapa a mais que o
+normal:
+
+```
+Você envia os arquivos      O GitHub compila e         O Portainer baixa
+   para o GitHub       →    publica a imagem      →    a imagem e sobe
+   (arrastar e soltar)      (automático)                (colar e clicar)
+```
+
+A etapa do meio roda sozinha. Você só faz a primeira e a terceira, e nas
+próximas atualizações só a primeira.
 
 ---
 
 ## Antes de começar
-
-Você vai precisar de:
 
 - Acesso ao seu Portainer
 - Uma conta no GitHub (grátis)
@@ -21,156 +52,140 @@ Você vai precisar de:
 
 ---
 
-## Passo 1 — Descobrir o que já publica seus sites
+## Passo 1 — Apontar o domínio
 
-Este é o único ponto que muda o resto do guia, então vale um minuto.
+Faça isso primeiro, porque é o que mais demora a propagar.
 
-1. Abra o Portainer
-2. Menu da esquerda → **Containers**
-3. Olhe a lista procurando algum destes nomes:
+No painel onde fica seu domínio, crie um registro **A**:
 
-| Se você vê… | Você usa | O que fazer no Passo 6 |
-| --- | --- | --- |
-| `nginx-proxy-manager`, `npm`, `nginxproxymanager` | Nginx Proxy Manager | Caminho **A** |
-| `traefik` | Traefik | Caminho **B** |
-| `coolify`, `easypanel`, `caprover` | Painel próprio | Caminho **C** |
-| nada parecido | Ainda não tem proxy | Caminho **C** |
+- **Nome:** `avisos`
+- **Aponta para:** o IP da sua VPS
 
-Anote o que apareceu. Se ficar em dúvida, tire um print da lista e me mande.
+A Let's Encrypt só emite o certificado depois que esse endereço responder.
 
 ---
 
 ## Passo 2 — Colocar o código no GitHub
 
-O Portainer busca o código de um endereço do GitHub. É tudo pelo navegador.
+Tudo pelo navegador.
 
 1. Entre em **github.com** e faça login
-2. Botão verde **New** (ou o **+** no canto superior direito → *New repository*)
+2. Botão **+** no canto superior direito → **New repository**
 3. Preencha:
-   - **Repository name:** `bbr-central-notificacoes`
+   - **Repository name:** `bbr-central-notificacoes` (tudo minúsculo)
    - Marque **Private** — o código fica só seu
-   - **Não** marque nenhuma das caixinhas de "Initialize"
+   - **Não** marque nenhuma caixinha de "Initialize"
 4. **Create repository**
 5. Na tela seguinte, clique em **uploading an existing file**
-6. Abra a pasta `APP interno BBR` no Finder, selecione **tudo** (`Cmd + A`) e
+6. Abra a pasta `APP interno BBR` no Finder, selecione tudo (`Cmd + A`) e
    arraste para a área do GitHub
-7. Espere terminar e clique em **Commit changes**
+7. **Commit changes**
 
-> **Confira antes de commitar:** na lista de arquivos enviados **não pode**
-> aparecer `.env`, `node_modules` nem `dados`. Se aparecer, remova do envio.
-> O `.env` guarda a chave secreta do push.
+> **Confira antes de commitar:** na lista **não pode** aparecer `.env`,
+> `node_modules` nem `dados`. O `.env` guarda a chave secreta do push.
 >
-> Se o Finder não mostrar o arquivo `.env`, ótimo — ele está oculto e não vai
-> junto. Para conferir, aperte `Cmd + Shift + .` na janela do Finder.
+> Ele fica oculto no Finder, então normalmente não vai junto. Para conferir,
+> aperte `Cmd + Shift + .` na janela do Finder.
 
-Ao final, copie o endereço do repositório da barra do navegador. Vai ser algo
-como `https://github.com/seu-usuario/bbr-central-notificacoes`.
+> **Importante:** a pasta `.github` **precisa** ir junto. É ela que constrói a
+> imagem. Se o Finder não mostrar, é porque começa com ponto — use o mesmo
+> `Cmd + Shift + .` para revelá-la.
 
 ---
 
-## Passo 3 — Gerar as variáveis
+## Passo 3 — Esperar a imagem ser construída
 
-Na sua máquina, dentro da pasta do projeto, rode:
+1. No seu repositório, abra a aba **Actions**
+2. Vai ter uma execução chamada **Publicar imagem** rodando
+3. Espere ficar com o ✓ verde (3 a 6 minutos na primeira vez)
+
+Ao terminar, clique nela e leia a última linha do log. Vai aparecer o endereço
+da imagem, algo como:
+
+```
+ghcr.io/seu-usuario/bbr-central-notificacoes:latest
+```
+
+**Anote esse endereço.** É o valor da variável `IMAGEM` no Passo 5.
+
+> Se a aba Actions estiver vazia, a pasta `.github` não subiu. Volte ao Passo 2.
+
+---
+
+## Passo 4 — Dar ao Portainer acesso à imagem
+
+Como o repositório é privado, a imagem também é. O Portainer precisa de uma
+credencial para baixá-la.
+
+### 4.1 — Criar o token no GitHub
+
+1. github.com → sua foto → **Settings**
+2. Role até o fim → **Developer settings**
+3. **Personal access tokens** → **Tokens (classic)** → **Generate new token
+   (classic)**
+4. **Note:** `portainer`
+5. **Expiration:** *No expiration*
+6. Marque **apenas** a caixa **read:packages**
+7. **Generate token** e **copie** — o GitHub só mostra uma vez
+
+### 4.2 — Cadastrar no Portainer
+
+1. Portainer → menu da esquerda → **Registries** → **+ Add registry**
+2. Escolha **Custom registry**
+3. Preencha:
+   - **Name:** `ghcr`
+   - **Registry URL:** `ghcr.io`
+   - Ligue **Authentication**
+   - **Username:** seu usuário do GitHub
+   - **Password:** o token que você copiou
+4. **Add registry**
+
+---
+
+## Passo 5 — Criar a stack
+
+1. Portainer → **Stacks** → **+ Add stack**
+2. **Name:** `bbr-push`
+3. **Build method:** **Web editor**
+4. Abra o arquivo `docker-compose.yml` da pasta do projeto, copie **tudo** e
+   cole no editor
+5. Role até **Environment variables** → **Advanced mode**
+6. Cole o bloco de variáveis (veja abaixo como gerar)
+7. **Deploy the stack**
+
+### Gerando o bloco de variáveis
+
+Na sua máquina, dentro da pasta do projeto:
 
 ```bash
 npm run variaveis -- https://avisos.seudominio.com.br
 ```
 
-Ele imprime um bloco pronto. **Copie esse bloco inteiro** — você vai colar no
-Portainer no passo 4. Antes, troque o `ADMIN_SENHA` pela senha que você quer
-usar para entrar no app.
+Esse é o único comando do guia inteiro, e roda no **seu computador**, não na
+VPS. Ele imprime o bloco pronto. Antes de colar, ajuste duas linhas:
 
-Esse é o único comando do guia todo, e roda no seu computador, não na VPS.
-
----
-
-## Passo 4 — Criar a stack no Portainer
-
-1. Portainer → menu da esquerda → **Stacks**
-2. Botão **+ Add stack**
-3. **Name:** `bbr-push`
-4. Em **Build method**, escolha **Repository**
-5. Preencha:
-   - **Repository URL:** o endereço do GitHub do passo 2
-   - **Repository reference:** deixe como está (`refs/heads/main`)
-   - **Compose path:** `docker-compose.yml`
-6. Como o repositório é privado, ligue **Authentication** e informe seu usuário
-   do GitHub e um *token*:
-   - Abra github.com → foto do perfil → **Settings** → role até o fim →
-     **Developer settings** → **Personal access tokens** → **Tokens (classic)**
-   - **Generate new token (classic)**, marque o escopo **repo**, gere e copie
-   - Cole no campo de senha do Portainer
-7. Role até **Environment variables** e clique em **Advanced mode**
-8. **Cole o bloco** que você copiou no passo 3
-9. Botão **Deploy the stack**
-
-A primeira vez demora de 2 a 5 minutos: o Portainer baixa o Node e instala as
-dependências. Nas próximas, cai para segundos.
+- **`IMAGEM`** → o endereço que você anotou no Passo 3
+- **`ADMIN_SENHA`** → a senha com que você vai entrar no app
 
 ---
 
-## Passo 5 — Conferir se subiu
+## Passo 6 — Conferir
 
-1. Portainer → **Containers**
-2. Procure `bbr-push`. O estado precisa estar **running** e, depois de uns 30
-   segundos, **healthy**
+1. Portainer → **Services** (ou **Stacks** → `bbr-push`)
+2. O serviço `bbr-push_bbr-push` precisa mostrar **1 / 1**
 
-Se aparecer *unhealthy* ou *exited*, clique no nome do container e depois em
-**Logs**. A primeira linha costuma dizer exatamente o que falta. Me mande o
-print que eu traduzo.
+Depois abra `https://avisos.seudominio.com.br`. Se aparecer o cadeado e a tela
+de login, acabou — o Traefik já pediu o certificado sozinho.
 
----
-
-## Passo 6 — Publicar com HTTPS
-
-Sem HTTPS o push **não funciona** — é regra do navegador, não do nosso código.
-
-Antes de tudo: no painel onde fica seu domínio, crie um registro **A** com o
-nome `avisos` apontando para o IP da sua VPS. Leva de minutos a algumas horas
-para propagar.
-
-### Caminho A — Nginx Proxy Manager
-
-1. Abra o Nginx Proxy Manager
-2. **Hosts** → **Proxy Hosts** → **Add Proxy Host**
-3. Aba **Details**:
-   - **Domain Names:** `avisos.seudominio.com.br`
-   - **Scheme:** `http`
-   - **Forward Hostname / IP:** `bbr-push`
-   - **Forward Port:** `3000`
-   - Ligue **Block Common Exploits** e **Websockets Support**
-4. Aba **SSL**:
-   - **SSL Certificate:** *Request a new SSL Certificate*
-   - Ligue **Force SSL** e **HTTP/2 Support**
-   - Aceite os termos da Let's Encrypt
-5. **Save**
-
-> Se der erro de "host not found" no passo 3, o proxy e o app estão em redes
-> Docker diferentes. Duas saídas: usar `IP-DA-SUA-VPS` e porta `3000` no lugar
-> de `bbr-push`, ou descomentar o bloco `networks` no `docker-compose.yml`. Me
-> avise que eu ajusto.
-
-### Caminho B — Traefik
-
-Me mande um print do `docker-compose.yml` do seu Traefik. Eu escrevo as
-*labels* certas e você só troca o arquivo — Traefik é configurado por rótulos,
-e eles precisam bater com a sua instalação.
-
-### Caminho C — Ainda não tem proxy
-
-Aqui eu recomendo instalar o **Nginx Proxy Manager**, que também é uma stack do
-Portainer e resolve o HTTPS de todos os seus sites por painel, com botão de
-renovar certificado. Me confirme que eu te passo a stack pronta dele.
+Se der erro de certificado, espere 2 minutos e recarregue. A emissão não é
+instantânea.
 
 ---
 
-## Passo 7 — Primeiro acesso e instalação no celular
+## Passo 7 — Instalar no celular
 
-1. Abra `https://avisos.seudominio.com.br` no computador
-2. Entre com o `ADMIN_EMAIL` e o `ADMIN_SENHA` que você definiu
-3. Vá em **Acessos** e crie as contas do time
-
-No celular de cada pessoa:
+Entre com o `ADMIN_EMAIL` e o `ADMIN_SENHA` que você definiu, vá em **Acessos**
+e crie as contas do time. Depois, no celular de cada pessoa:
 
 **Android (Chrome)** — o navegador oferece *Instalar app*. Aceite, abra pelo
 ícone novo e toque em **Ativar agora**.
@@ -182,7 +197,7 @@ No celular de cada pessoa:
 3. Abra pelo ícone novo — não pelo Safari
 4. Toque em **Ativar agora** e permita
 
-Depois, em **Aparelho** → **Enviar teste**, para confirmar que chega.
+Confirme em **Aparelho** → **Enviar teste**.
 
 ---
 
@@ -190,24 +205,27 @@ Depois, em **Aparelho** → **Enviar teste**, para confirmar que chega.
 
 ### Atualizar o app
 
-1. Suba os arquivos novos no GitHub (mesma tela do passo 2)
-2. Portainer → **Stacks** → `bbr-push` → **Pull and redeploy**
+1. Suba os arquivos novos no GitHub (mesma tela do Passo 2)
+2. Espere o ✓ verde na aba **Actions**
+3. Portainer → **Stacks** → `bbr-push` → **Update the stack**, com
+   **Re-pull image** ligado
 
-Os dados ficam no volume e **não** são apagados por atualização.
+O volume não é tocado: contas, aparelhos e histórico continuam lá. Testei esse
+ciclo — o app desliga antes de o novo subir, então nunca há dois processos
+escrevendo no banco ao mesmo tempo.
 
 ### Fazer backup
 
-O banco inteiro é um arquivo só, dentro do volume `bbr-push-dados`.
+O banco inteiro é um arquivo só, no volume `bbr-push-dados`.
 
-1. Portainer → **Volumes** → `bbr-push-dados` → **Browse**
-2. Baixe o arquivo `central.db`
+Portainer → **Volumes** → `bbr-push-dados` → **Browse** → baixe `central.db`.
 
-Vale fazer isso de vez em quando, principalmente antes de uma atualização.
+Vale fazer antes de cada atualização.
 
 ### Ver o que está acontecendo
 
-Portainer → **Containers** → `bbr-push` → **Logs**. Toda notificação enviada e
-toda falha de entrega aparece ali.
+Portainer → **Services** → `bbr-push_bbr-push` → **Logs**. Toda notificação
+enviada e toda falha de entrega aparece ali.
 
 ---
 
@@ -215,12 +233,15 @@ toda falha de entrega aparece ali.
 
 | O que você vê | O que é | O que fazer |
 | --- | --- | --- |
-| Container em *exited* logo após o deploy | Falta alguma variável | Abra os **Logs**: a primeira linha diz qual |
-| `port is already allocated` | A porta 3000 já é de outro serviço seu | No `docker-compose.yml`, troque `'3000:3000'` por `'3210:3000'` e refaça o deploy |
-| Site abre em `http` mas não em `https` | Certificado não emitido | Confira se o registro **A** do domínio já aponta para a VPS |
-| Login não funciona só no celular | Está sem HTTPS | O cookie de sessão exige conexão segura |
+| `network AutoNet not found` | A rede tem outro nome | Portainer → **Networks**, confira o nome exato |
+| `no such image` ou *pull access denied* | O Portainer não conseguiu baixar | Refaça o Passo 4; confira se o token tem **read:packages** |
+| Serviço em **0 / 1** | Falta alguma variável, ou a imagem não existe | Abra os **Logs** do serviço: a primeira linha diz qual |
+| **404 page not found** no site | O Traefik não casou a rota | O `DOMINIO` precisa ser só o host: sem `https://` e sem barra no fim |
+| Erro de certificado que não passa | O registro **A** não propagou | Confira o DNS; veja os **Logs** do Traefik |
+| Aba **Actions** vazia no GitHub | A pasta `.github` não subiu | Volte ao Passo 2 e envie a pasta oculta |
+| Login funciona no PC mas não no celular | Está entrando por `http` | Use sempre `https://` |
 | iPhone sem o botão de ativar | App ainda não está na tela inicial | Adicione pelo Safari e abra pelo ícone |
 | Notificação entra no histórico mas não chega | Permissão revogada ou inscrição expirada | Reative em **Aparelho** |
 
-Em qualquer um desses casos, um print dos **Logs** do container me diz quase
-sempre a causa exata.
+Em qualquer caso, um print dos **Logs** do serviço quase sempre me dá a causa
+exata.

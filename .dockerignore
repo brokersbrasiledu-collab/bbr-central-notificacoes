@@ -1,0 +1,20 @@
+# Nada daqui entra na imagem.
+# O .env fica de fora de propósito: as variáveis são preenchidas no
+# painel do Portainer, não dentro da imagem.
+.env
+.env.*
+!.env.example
+dados/
+node_modules/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.git/
+.github/
+.gitignore
+.DS_Store
+.claude/
+infra/
+README.md
+PORTAINER.md
