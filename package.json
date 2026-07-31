@@ -1,0 +1,29 @@
+{
+  "name": "bbr-central-notificacoes",
+  "version": "1.0.0",
+  "description": "Central de Notificações Push da Brokers Brasil — PWA instalável + backend Node com Web Push (VAPID), webhooks e histórico.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "vapid": "node scripts/gerar-vapid.js",
+    "icones": "node scripts/gerar-icones.js",
+    "migrar": "node scripts/migrar.js",
+    "criar-admin": "node scripts/criar-admin.js",
+    "variaveis": "node scripts/mostrar-variaveis.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "better-sqlite3": "^11.10.0",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "jsonwebtoken": "^9.0.2",
+    "web-push": "^3.6.7"
+  }
+}

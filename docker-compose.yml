@@ -1,0 +1,66 @@
+# ════════════════════════════════════════════════════════════════
+# Central de Notificações Push — Brokers Brasil
+# Stack para o Portainer.
+#
+# Este arquivo não encosta em nada que já roda na VPS: cria um
+# container próprio, um volume próprio e usa uma porta só dele.
+#
+# Como usar: Portainer → Stacks → Add stack → Repository
+# (o passo a passo completo está no arquivo PORTAINER.md)
+# ════════════════════════════════════════════════════════════════
+
+services:
+  bbr-push:
+    build: .
+    image: bbr-push:1.0.0
+    container_name: bbr-push
+    restart: unless-stopped
+
+    environment:
+      # ── Fixos: não precisa mexer ──────────────────────────────
+      NODE_ENV: production
+      PORT: 3000
+      DB_PATH: /dados/central.db
+      TRUST_PROXY: 1 # o proxy da frente entrega o IP real
+
+      # ── Preencha no painel do Portainer ───────────────────────
+      APP_URL: ${APP_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_SUBJECT: ${VAPID_SUBJECT}
+      ADMIN_NOME: ${ADMIN_NOME}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_SENHA: ${ADMIN_SENHA}
+
+    volumes:
+      # O banco mora aqui. O volume sobrevive a atualizações da stack:
+      # trocar a versão do app NÃO apaga contas, aparelhos nem histórico.
+      - bbr-dados:/dados
+
+    # Porta só desta aplicação. Se a 3000 já estiver ocupada na sua VPS,
+    # troque apenas o número da ESQUERDA (ex.: "3210:3000").
+    ports:
+      - '3000:3000'
+
+    # ── Se o seu proxy (Nginx Proxy Manager, Traefik) roda em Docker ──
+    # Descomente os dois blocos "networks" abaixo e troque o nome pela
+    # rede que o proxy usa. Aí ele alcança este container pelo nome
+    # "bbr-push" na porta 3000, e você pode até remover o bloco "ports".
+    #
+    # networks:
+    #   - proxy
+
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m' # evita o log crescer sem limite no disco da VPS
+        max-file: '3'
+
+volumes:
+  bbr-dados:
+    name: bbr-push-dados
+# networks:
+#   proxy:
+#     external: true
+#     name: NOME-DA-REDE-DO-SEU-PROXY
