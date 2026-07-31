@@ -13,17 +13,19 @@
     />
 
     <!-- PWA -->
-    <link rel="manifest" href="/manifest.json" />
+    <!-- O ?v= também vai nos ícones: sem ele, uma reinstalação na tela
+         inicial poderia pegar de novo o ícone antigo guardado pelo Safari. -->
+    <link rel="manifest" href="/manifest.json?v=__VERSAO__" />
     <meta name="theme-color" content="#141414" />
-    <link rel="icon" type="image/png" href="/icones/favicon-96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/icones/favicon.svg" />
-    <link rel="shortcut icon" href="/icones/favicon.ico" />
+    <link rel="icon" type="image/png" href="/icones/favicon-96.png?v=__VERSAO__" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/icones/favicon.svg?v=__VERSAO__" />
+    <link rel="shortcut icon" href="/icones/favicon.ico?v=__VERSAO__" />
 
     <!-- iOS: necessário para o app abrir em tela cheia quando salvo na tela inicial -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="BBR Avisos" />
-    <link rel="apple-touch-icon" href="/icones/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="/icones/apple-touch-icon.png?v=__VERSAO__" />
 
     <!-- O ?v= é trocado pelo servidor pela versão da build. Cada deploy gera
          uma URL nova, então o navegador nunca reaproveita o arquivo antigo. -->

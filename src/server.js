@@ -114,9 +114,11 @@ app.get('/sw.js', (_req, res) => {
  * Sem isto, corrigir a política de cache não bastaria: a cópia antiga
  * continuaria valendo até vencer, e o deploy pareceria não ter funcionado.
  */
-const indexServido = fs
-  .readFileSync(path.join(PUBLICO, 'index.html'), 'utf8')
-  .replaceAll('__VERSAO__', config.versao);
+const comVersao = (arquivo) =>
+  fs.readFileSync(path.join(PUBLICO, arquivo), 'utf8').replaceAll('__VERSAO__', config.versao);
+
+const indexServido = comVersao('index.html');
+const manifestServido = comVersao('manifest.json');
 
 function enviarApp(_req, res) {
   res.setHeader('Cache-Control', 'no-cache');
@@ -126,6 +128,14 @@ function enviarApp(_req, res) {
 
 app.get('/', enviarApp);
 app.get('/index.html', enviarApp);
+
+// O manifest também carimbado: assim o endereço dos ícones muda a cada
+// deploy e uma reinstalação não reaproveita o ícone antigo.
+app.get('/manifest.json', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('application/manifest+json');
+  res.send(manifestServido);
+});
 
 /**
  * O iOS e alguns navegadores procuram estes arquivos direto na raiz,
