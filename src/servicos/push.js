@@ -9,6 +9,7 @@
 import webpush from 'web-push';
 import { db } from '../db/index.js';
 import { config } from '../config.js';
+import { paraNotificacao } from './modelo.js';
 
 let configurado = false;
 
@@ -156,7 +157,9 @@ export async function publicarNotificacao({
       resultado = await enviarParaAparelhos(aparelhos, {
         id,
         titulo,
-        texto,
+        // A notificação nativa recebe o texto limpo (sem os asteriscos de
+        // negrito). O histórico, gravado acima, mantém o original.
+        texto: paraNotificacao(texto),
         tipo,
         origem,
         url: `${config.appUrl}/#/historico`,

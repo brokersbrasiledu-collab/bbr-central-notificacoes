@@ -9,13 +9,18 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { db } from '../db/index.js';
-import { config, TIPOS } from '../config.js';
+import { config, TIPOS, LIMITE_TITULO, LIMITE_TEXTO } from '../config.js';
 import { exigirNivel } from '../middlewares/auth.js';
 import { publicarNotificacao } from '../servicos/push.js';
-import { aplicarModelo, variaveisDisponiveis } from '../servicos/modelo.js';
+import { aplicarModelo, variaveisDisponiveis, primeiroCampo } from '../servicos/modelo.js';
 
 export const rotasWebhooks = Router();
 export const rotasGatilho = Router();
+
+// Nomes aceitos para cada campo no modo direto. Quanto mais tolerante,
+// menos tempo perdido acertando o nome exato na ferramenta que dispara.
+const ALIAS_TITULO = ['titulo', 'title', 'assunto', 'subject'];
+const ALIAS_TEXTO = ['texto', 'mensagem', 'message', 'body', 'descricao', 'text'];
 
 const novoSlug = () => crypto.randomBytes(9).toString('base64url'); // 12 caracteres
 const novaChave = () => crypto.randomBytes(24).toString('base64url'); // 32 caracteres
@@ -40,22 +45,35 @@ rotasWebhooks.get('/', (_req, res) => {
 
 rotasWebhooks.post('/', (req, res) => {
   const nome = String(req.body?.nome || '').trim();
+  const modo = req.body?.modo === 'modelo' ? 'modelo' : 'direto';
   const modeloTitulo = String(req.body?.modelo_titulo || '').trim();
   const modeloTexto = String(req.body?.modelo_texto || '').trim();
   const tipo = TIPOS.includes(req.body?.tipo) ? req.body.tipo : 'lead';
   const publico = String(req.body?.publico || 'todos').trim();
 
   if (!nome) return res.status(400).json({ erro: 'Dê um nome ao webhook.' });
-  if (!modeloTitulo || !modeloTexto) {
+  // No modo direto os modelos são opcionais: servem só de reserva para
+  // quando a chamada não trouxer um dos dois campos.
+  if (modo === 'modelo' && (!modeloTitulo || !modeloTexto)) {
     return res.status(400).json({ erro: 'Preencha o modelo de título e de mensagem.' });
   }
 
   const info = db
     .prepare(
-      `INSERT INTO webhooks (nome, slug, chave_secreta, modelo_titulo, modelo_texto, tipo, publico, criado_por)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO webhooks (nome, slug, chave_secreta, modo, modelo_titulo, modelo_texto, tipo, publico, criado_por)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(nome, novoSlug(), novaChave(), modeloTitulo, modeloTexto, tipo, publico, req.usuario.id);
+    .run(
+      nome,
+      novoSlug(),
+      novaChave(),
+      modo,
+      modeloTitulo,
+      modeloTexto,
+      tipo,
+      publico,
+      req.usuario.id
+    );
 
   const webhook = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(info.lastInsertRowid);
   res.status(201).json({ webhook: comEndereco(webhook) });
@@ -68,6 +86,7 @@ rotasWebhooks.patch('/:id', (req, res) => {
 
   const campos = {
     nome: req.body?.nome !== undefined ? String(req.body.nome).trim() : atual.nome,
+    modo: ['direto', 'modelo'].includes(req.body?.modo) ? req.body.modo : atual.modo,
     modelo_titulo:
       req.body?.modelo_titulo !== undefined
         ? String(req.body.modelo_titulo).trim()
@@ -82,10 +101,12 @@ rotasWebhooks.patch('/:id', (req, res) => {
   };
 
   db.prepare(
-    `UPDATE webhooks SET nome = ?, modelo_titulo = ?, modelo_texto = ?, tipo = ?, publico = ?, ativo = ?
+    `UPDATE webhooks SET nome = ?, modo = ?, modelo_titulo = ?, modelo_texto = ?,
+                         tipo = ?, publico = ?, ativo = ?
       WHERE id = ?`
   ).run(
     campos.nome,
+    campos.modo,
     campos.modelo_titulo,
     campos.modelo_texto,
     campos.tipo,
@@ -189,14 +210,48 @@ async function dispararGatilho(req, res) {
         : {};
   delete dados.chave; // não deixa a chave secreta vazar para o histórico
 
-  const titulo = aplicarModelo(webhook.modelo_titulo, dados).trim() || webhook.nome;
-  const texto =
-    aplicarModelo(webhook.modelo_texto, dados).trim() || 'Evento recebido pelo webhook.';
+  let titulo;
+  let texto;
+
+  if (webhook.modo === 'direto') {
+    // O título e o texto vêm prontos. É o caminho para o n8n, o Make e
+    // qualquer ferramenta que já monta a mensagem antes de chamar.
+    titulo = primeiroCampo(dados, ALIAS_TITULO);
+    texto = primeiroCampo(dados, ALIAS_TEXTO);
+
+    if (!titulo && !texto) {
+      return res.status(400).json({
+        erro: 'Envie "titulo" e "texto" no corpo da requisição.',
+        exemplo: {
+          titulo: 'Venda aprovada',
+          texto: 'A compra de Maria Souza foi confirmada.',
+          tipo: 'meta',
+        },
+        aceito_tambem: {
+          titulo: ALIAS_TITULO,
+          texto: ALIAS_TEXTO,
+        },
+      });
+    }
+
+    // Se só um dos dois vier, o modelo cadastrado cobre o que faltou.
+    if (!titulo) titulo = aplicarModelo(webhook.modelo_titulo, dados).trim() || webhook.nome;
+    if (!texto) texto = aplicarModelo(webhook.modelo_texto, dados).trim();
+  } else {
+    titulo = aplicarModelo(webhook.modelo_titulo, dados).trim() || webhook.nome;
+    texto = aplicarModelo(webhook.modelo_texto, dados).trim();
+  }
+
+  if (!texto) texto = 'Evento recebido pelo webhook.';
+
+  // O tipo pode vir no próprio evento — assim um mesmo gatilho serve para
+  // avisos de naturezas diferentes, sem precisar criar vários webhooks.
+  const tipo = TIPOS.includes(dados.tipo) ? dados.tipo : webhook.tipo;
 
   const resultado = await publicarNotificacao({
-    titulo: titulo.slice(0, 120),
-    texto: texto.slice(0, 500),
-    tipo: webhook.tipo,
+    titulo: titulo.slice(0, LIMITE_TITULO),
+    texto: texto.slice(0, LIMITE_TEXTO),
+    tipo,
     origem: 'webhook',
     publico: webhook.publico,
     webhookId: webhook.id,

@@ -1,173 +1,151 @@
 #!/usr/bin/env node
 /**
- * Gera os ícones PNG do PWA sem depender de nenhuma biblioteca gráfica:
- * o PNG é montado à mão (cabeçalho + zlib) e o desenho é rasterizado
- * com supersampling 4×4 para as curvas saírem suaves.
+ * Gera todos os ícones do PWA a partir da logo oficial em marca/logo-bbr.png.
  *
- * Marca: monograma "B" em ouro sobre o preto da Brokers Brasil.
+ * O que ele faz:
+ *   1. Lê a logo e encontra o emblema dentro dela (a arte original vem com
+ *      sobra de fundo em volta, que precisa sair para o ícone não ficar
+ *      pequeno demais na tela inicial).
+ *   2. Recorta o fundo escuro transformando-o em transparência, pelo brilho
+ *      de cada pixel. Assim a marca pousa em qualquer fundo sem emenda.
+ *   3. Redimensiona por média de área e monta cada tamanho pedido.
  *
  *   npm run icones
  */
-import zlib from 'node:zlib';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { lerPNG, escreverPNG, redimensionar, compor, tela, luz } from './lib/png.js';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ORIGEM = path.join(RAIZ, 'marca', 'logo-bbr.png');
 const DESTINO = path.join(RAIZ, 'public', 'icones');
 
 const PRETO = [0x14, 0x14, 0x14];
-const OURO = [0xb0, 0xa4, 0x73];
 
-// ── Codificador PNG mínimo (RGBA, 8 bits) ───────────────────────
-
-const TABELA_CRC = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-
-function crc32(buf) {
-  let c = 0xffffffff;
-  for (let i = 0; i < buf.length; i++) c = TABELA_CRC[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
+if (!fs.existsSync(ORIGEM)) {
+  console.error(`\n  Não encontrei a logo em marca/logo-bbr.png\n`);
+  process.exit(1);
 }
 
-function bloco(tipo, dados) {
-  const tamanho = Buffer.alloc(4);
-  tamanho.writeUInt32BE(dados.length);
-  const corpo = Buffer.concat([Buffer.from(tipo, 'ascii'), dados]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(corpo));
-  return Buffer.concat([tamanho, corpo, crc]);
-}
+const original = lerPNG(fs.readFileSync(ORIGEM));
+console.log(`\n  Logo lida: ${original.largura}×${original.altura}`);
 
-function codificarPNG(largura, altura, rgba) {
-  const assinatura = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+// ── 1. Onde está o emblema ──────────────────────────────────────
+// O fundo da arte é quase preto e o emblema é dourado, então o brilho
+// separa os dois com folga. Medindo o arquivo original, o fundo (com o
+// leve degradê que ele tem) vai até ~49 e o traço começa perto de 160 —
+// sobra um vale bem vazio no meio para cortar sem dúvida.
+const LIMIAR = 80;
 
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(largura, 0);
-  ihdr.writeUInt32BE(altura, 4);
-  ihdr[8] = 8; // profundidade de bits
-  ihdr[9] = 6; // RGBA
-  ihdr[10] = 0; // compressão
-  ihdr[11] = 0; // filtro
-  ihdr[12] = 0; // sem entrelaçamento
+let minX = original.largura;
+let minY = original.altura;
+let maxX = -1;
+let maxY = -1;
 
-  // Cada linha vai precedida do byte de filtro (0 = nenhum).
-  const linhas = Buffer.alloc(altura * (largura * 4 + 1));
-  for (let y = 0; y < altura; y++) {
-    const inicio = y * (largura * 4 + 1);
-    linhas[inicio] = 0;
-    rgba.copy(linhas, inicio + 1, y * largura * 4, (y + 1) * largura * 4);
-  }
-
-  return Buffer.concat([
-    assinatura,
-    bloco('IHDR', ihdr),
-    bloco('IDAT', zlib.deflateSync(linhas, { level: 9 })),
-    bloco('IEND', Buffer.alloc(0)),
-  ]);
-}
-
-// ── Desenho do monograma ────────────────────────────────────────
-
-/**
- * Proporção largura/altura da letra. Barrigas circulares deixariam o "B"
- * estreito demais, então elas são elípticas e a largura é escolhida aqui.
- */
-const ASPECTO = 0.76;
-
-/**
- * O "B" é montado com geometria: uma haste vertical e dois meios-anéis
- * elípticos à direita. Coordenadas em unidades da altura da letra —
- * y vai de 0 a 1 e x de 0 a ASPECTO.
- */
-function dentroDoB(x, y) {
-  const ESPESSURA = 0.165;
-
-  // Haste vertical.
-  if (x >= 0 && x <= 0.2 && y >= 0 && y <= 1) return true;
-
-  const meioAnel = (cx, cy, rx, ry) => {
-    // Começa um pouco antes do centro para emendar na haste sem costura.
-    if (x < cx - 0.06) return false;
-    const dx = x - cx;
-    const dy = y - cy;
-    const foraExterno = (dx / rx) ** 2 + (dy / ry) ** 2 > 1;
-    if (foraExterno) return false;
-    // Vazio interno: o buraco da barriga.
-    return (dx / (rx - ESPESSURA)) ** 2 + (dy / (ry - ESPESSURA)) ** 2 >= 1;
-  };
-
-  // Barriga de cima (menor) e de baixo (maior), como num "B" tipográfico.
-  return meioAnel(0.2, 0.268, 0.5, 0.268) || meioAnel(0.2, 0.736, 0.56, 0.264);
-}
-
-/**
- * Rasteriza um ícone quadrado.
- * @param {number} tamanho    lado em pixels
- * @param {number} proporcao  fração do lado ocupada pela letra (área segura)
- */
-function desenharIcone(tamanho, proporcao) {
-  const rgba = Buffer.alloc(tamanho * tamanho * 4);
-  const AMOSTRAS = 4; // supersampling 4×4 → 16 amostras por pixel
-
-  // Caixa da letra, centralizada. A letra é mais alta que larga.
-  const alturaLetra = tamanho * proporcao;
-  const larguraLetra = alturaLetra * ASPECTO;
-  const esquerda = (tamanho - larguraLetra) / 2;
-  const topo = (tamanho - alturaLetra) / 2;
-
-  for (let py = 0; py < tamanho; py++) {
-    for (let px = 0; px < tamanho; px++) {
-      let dentro = 0;
-      for (let sy = 0; sy < AMOSTRAS; sy++) {
-        for (let sx = 0; sx < AMOSTRAS; sx++) {
-          const ax = px + (sx + 0.5) / AMOSTRAS;
-          const ay = py + (sy + 0.5) / AMOSTRAS;
-          // Mesma escala nos dois eixos: a proporção já está no ASPECTO.
-          const nx = (ax - esquerda) / alturaLetra;
-          const ny = (ay - topo) / alturaLetra;
-          if (nx >= 0 && nx <= ASPECTO && ny >= 0 && ny <= 1 && dentroDoB(nx, ny)) dentro++;
-        }
-      }
-
-      // Mistura fundo e ouro conforme a cobertura da amostragem.
-      const cobertura = dentro / (AMOSTRAS * AMOSTRAS);
-      const i = (py * tamanho + px) * 4;
-      for (let c = 0; c < 3; c++) {
-        rgba[i + c] = Math.round(PRETO[c] * (1 - cobertura) + OURO[c] * cobertura);
-      }
-      rgba[i + 3] = 255;
+for (let y = 0; y < original.altura; y++) {
+  for (let x = 0; x < original.largura; x++) {
+    const i = (y * original.largura + x) * 4;
+    if (luz(original.rgba[i], original.rgba[i + 1], original.rgba[i + 2]) > LIMIAR) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
     }
   }
-
-  return codificarPNG(tamanho, tamanho, rgba);
 }
 
-// ── Geração dos arquivos ────────────────────────────────────────
+if (maxX < 0) {
+  console.error('  Não achei o emblema na imagem — o limiar de brilho pode estar alto demais.');
+  process.exit(1);
+}
+
+const recorte = {
+  x: minX,
+  y: minY,
+  largura: maxX - minX + 1,
+  altura: maxY - minY + 1,
+};
+console.log(
+  `  Emblema encontrado: ${recorte.largura}×${recorte.altura} ` +
+    `(a partir de ${recorte.x},${recorte.y})`
+);
+
+// ── 2. Fundo escuro vira transparência ──────────────────────────
+// O brilho do pixel vira o canal alpha. Como o traço é dourado sobre
+// quase-preto, isso recorta a marca com a borda suave que ela já tem,
+// sem precisar de máscara manual.
+const emblema = {
+  largura: recorte.largura,
+  altura: recorte.altura,
+  rgba: Buffer.alloc(recorte.largura * recorte.altura * 4),
+};
+
+// Valores tirados do histograma do arquivo original. O piso precisa ficar
+// ACIMA do fundo mais claro (~49, no miolo do degradê), senão sobra um
+// retângulo fantasma em volta do emblema.
+const PISO = 52; // abaixo disto é fundo, vira transparente
+const TETO = 150; // acima disto é traço cheio, fica opaco
+
+for (let y = 0; y < recorte.altura; y++) {
+  for (let x = 0; x < recorte.largura; x++) {
+    const o = ((y + recorte.y) * original.largura + (x + recorte.x)) * 4;
+    const d = (y * recorte.largura + x) * 4;
+    const l = luz(original.rgba[o], original.rgba[o + 1], original.rgba[o + 2]);
+
+    const alpha = Math.max(0, Math.min(1, (l - PISO) / (TETO - PISO)));
+    emblema.rgba[d] = original.rgba[o];
+    emblema.rgba[d + 1] = original.rgba[o + 1];
+    emblema.rgba[d + 2] = original.rgba[o + 2];
+    emblema.rgba[d + 3] = Math.round(alpha * 255);
+  }
+}
+
+// ── 3. Montagem dos arquivos ────────────────────────────────────
 
 fs.mkdirSync(DESTINO, { recursive: true });
 
+/**
+ * Monta um ícone quadrado com o emblema centralizado.
+ * @param {number} lado       tamanho final em pixels
+ * @param {number} ocupacao   fração do lado que o emblema ocupa
+ * @param {boolean} comFundo  true = fundo preto da marca; false = transparente
+ */
+function montar(lado, ocupacao, comFundo = true) {
+  const base = tela(lado, lado, comFundo ? PRETO : null);
+
+  // Mantém a proporção do emblema dentro da área permitida.
+  const escala = Math.min(
+    (lado * ocupacao) / emblema.largura,
+    (lado * ocupacao) / emblema.altura
+  );
+  const largura = Math.max(1, Math.round(emblema.largura * escala));
+  const altura = Math.max(1, Math.round(emblema.altura * escala));
+
+  const reduzido = redimensionar(emblema, largura, altura);
+  compor(base, reduzido, Math.round((lado - largura) / 2), Math.round((lado - altura) / 2));
+
+  return escreverPNG(lado, lado, base.rgba);
+}
+
 const arquivos = [
-  // A letra ocupa 56% do ícone comum e 44% no maskable — o Android
-  // recorta as bordas do maskable, então a marca precisa de folga.
-  ['icone-192.png', 192, 0.56],
-  ['icone-512.png', 512, 0.56],
-  ['icone-maskable-512.png', 512, 0.44],
-  ['apple-touch-icon.png', 180, 0.56],
-  ['favicon-32.png', 32, 0.6],
+  // Ícone comum: o emblema ocupa 78% do quadrado.
+  ['icone-192.png', () => montar(192, 0.78)],
+  ['icone-512.png', () => montar(512, 0.78)],
+  // Maskable: o Android recorta as bordas, então a marca recua para 58%.
+  ['icone-maskable-512.png', () => montar(512, 0.58)],
+  ['apple-touch-icon.png', () => montar(180, 0.78)],
+  // No favicon a marca ganha o quadro inteiro para não sumir a 32px.
+  ['favicon-32.png', () => montar(32, 0.92)],
+  // Versão sem fundo, usada dentro da interface do app.
+  ['marca.png', () => montar(256, 1.0, false)],
 ];
 
-for (const [nome, tamanho, proporcao] of arquivos) {
-  const png = desenharIcone(tamanho, proporcao);
+console.log();
+for (const [nome, gerar] of arquivos) {
+  const png = gerar();
   fs.writeFileSync(path.join(DESTINO, nome), png);
-  console.log(`  ✓ ${nome.padEnd(26)} ${tamanho}×${tamanho}  ${(png.length / 1024).toFixed(1)} kB`);
+  console.log(`  ✓ ${nome.padEnd(26)} ${(png.length / 1024).toFixed(1)} kB`);
 }
 
 console.log(`\n  Ícones gerados em public/icones/\n`);

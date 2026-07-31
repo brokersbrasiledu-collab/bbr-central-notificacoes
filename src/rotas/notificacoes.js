@@ -3,7 +3,7 @@
  */
 import { Router } from 'express';
 import { db } from '../db/index.js';
-import { TIPOS } from '../config.js';
+import { TIPOS, LIMITE_TITULO, LIMITE_TEXTO } from '../config.js';
 import { exigirLogin, exigirNivel } from '../middlewares/auth.js';
 import { publicarNotificacao, aparelhosDoPublico } from '../servicos/push.js';
 
@@ -73,11 +73,15 @@ rotasNotificacoes.post('/enviar', exigirNivel('operador'), async (req, res) => {
   const publico = String(req.body?.publico || 'todos').trim();
 
   if (!titulo) return res.status(400).json({ erro: 'O título é obrigatório.' });
-  if (titulo.length > 120)
-    return res.status(400).json({ erro: 'O título deve ter no máximo 120 caracteres.' });
+  if (titulo.length > LIMITE_TITULO)
+    return res
+      .status(400)
+      .json({ erro: `O título deve ter no máximo ${LIMITE_TITULO} caracteres.` });
   if (!texto) return res.status(400).json({ erro: 'A mensagem é obrigatória.' });
-  if (texto.length > 500)
-    return res.status(400).json({ erro: 'A mensagem deve ter no máximo 500 caracteres.' });
+  if (texto.length > LIMITE_TEXTO)
+    return res
+      .status(400)
+      .json({ erro: `A mensagem deve ter no máximo ${LIMITE_TEXTO} caracteres.` });
 
   const resultado = await publicarNotificacao({
     titulo,

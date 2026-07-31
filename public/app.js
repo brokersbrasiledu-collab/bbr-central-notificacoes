@@ -40,6 +40,17 @@ async function api(caminho, opcoes = {}) {
   return dados;
 }
 
+/**
+ * Prepara a mensagem para exibição no histórico.
+ *
+ * Escapa primeiro (segurança) e só então converte o negrito *assim* —
+ * o mesmo que se escreve no n8n ou no WhatsApp. As quebras de linha são
+ * preservadas pelo CSS (white-space: pre-line).
+ */
+function formatarMensagem(texto) {
+  return esc(texto).replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>');
+}
+
 /** Impede que texto vindo do banco seja interpretado como HTML. */
 function esc(valor) {
   return String(valor ?? '').replace(
@@ -333,7 +344,7 @@ function linhaDoTempo(n) {
         <span class="etiqueta etiqueta--${esc(n.tipo)}">${esc(ROTULO_TIPO[n.tipo] || n.tipo)}</span>
         <span class="tempo__titulo">${esc(n.titulo)}</span>
       </div>
-      <p class="tempo__texto">${esc(n.texto)}</p>
+      <p class="tempo__texto">${formatarMensagem(n.texto)}</p>
       <div class="tempo__meta">
         <span>${esc(quando(n.criada_em))}</span>
         <span>${origem}</span>
@@ -508,10 +519,21 @@ function telaEnviar(container) {
 /* ── Webhooks ──────────────────────────────────────────────── */
 
 function cartaoWebhook(w) {
+  // No modo direto o exemplo mostra o corpo que a ferramenta deve mandar;
+  // no modo modelo, os dados crus que alimentam as {{variaveis}}.
+  const corpo =
+    w.modo === 'direto'
+      ? `{
+  "titulo": "✅ Venda aprovada",
+  "texto": "A compra de Maria Souza foi confirmada.\\n\\n*Valor:* R$ 1.200,00",
+  "tipo": "${w.tipo}"
+}`
+      : `{"nome":"Maria","telefone":"11 90000-0000"}`;
+
   const exemplo = `curl -X POST ${w.endereco} \\
   -H "X-Chave-Secreta: ${w.chave_secreta}" \\
   -H "Content-Type: application/json" \\
-  -d '{"nome":"Maria","telefone":"11 90000-0000"}'`;
+  -d '${corpo}'`;
 
   return `
     <li class="item" data-id="${w.id}">
@@ -520,6 +542,7 @@ function cartaoWebhook(w) {
           <span class="item__nome">${esc(w.nome)}</span>
           ${w.ativo ? '' : '<span class="selo-inativo">Desativado</span>'}
           <div class="item__meta">
+            <span>${w.modo === 'direto' ? 'JSON pronto' : 'Modelo com variáveis'}</span>
             <span>${esc(ROTULO_TIPO[w.tipo] || w.tipo)}</span>
             <span>${esc(rotuloPublico(w.publico))}</span>
             <span>${w.total_disparos} disparo(s)</span>
@@ -580,21 +603,50 @@ async function telaWebhooks(container) {
         </label>
 
         <label class="campo">
-          <span>Modelo do título</span>
-          <input name="modelo_titulo" required value="Novo lead: {{nome}}" />
+          <span>Como a mensagem chega</span>
+          <select name="modo">
+            <option value="direto">Já vem pronta no JSON — n8n, Make, Zapier</option>
+            <option value="modelo">Montada aqui, com {{variáveis}}</option>
+          </select>
         </label>
 
-        <label class="campo">
-          <span>Modelo da mensagem</span>
-          <textarea name="modelo_texto" required>{{nome}} chegou pelo {{origem}}. Telefone: {{telefone}}</textarea>
-        </label>
+        <div id="ajuda-direto">
+          <p class="dica">
+            Mande <code>titulo</code> e <code>texto</code> no corpo da chamada. O
+            título é o que aparece na tela do celular; o texto completo fica no
+            histórico. Opcionalmente, <code>tipo</code> define a etiqueta
+            (<code>lead</code>, <code>alerta</code>, <code>meta</code>,
+            <code>aviso</code>).
+          </p>
+          <pre class="dica" style="white-space:pre-wrap;margin-top:10px">{
+  "titulo": "✅ Venda aprovada",
+  "texto": "A compra de {{ $json.customer.name }} foi confirmada.\\n\\n*Valor:* R$ {{ $json.value }}",
+  "tipo": "meta"
+}</pre>
+          <p class="dica" style="margin-top:8px">
+            Dentro do texto, <code>\\n</code> quebra a linha e <code>*assim*</code>
+            deixa em negrito no histórico.
+          </p>
+        </div>
 
-        <p class="dica">
-          Use <code>{{campo}}</code> para puxar qualquer valor do JSON recebido.
-          Campos aninhados funcionam com ponto: <code>{{lead.nome}}</code>,
-          <code>{{itens[0].valor}}</code>. Já vêm prontas:
-          <code>{{agora}}</code>, <code>{{data}}</code>, <code>{{hora}}</code>.
-        </p>
+        <div id="campos-modelo" hidden>
+          <label class="campo">
+            <span>Modelo do título</span>
+            <input name="modelo_titulo" value="Novo lead: {{nome}}" />
+          </label>
+
+          <label class="campo" style="margin-top:14px">
+            <span>Modelo da mensagem</span>
+            <textarea name="modelo_texto">{{nome}} chegou pelo {{origem}}. Telefone: {{telefone}}</textarea>
+          </label>
+
+          <p class="dica" style="margin-top:10px">
+            Use <code>{{campo}}</code> para puxar qualquer valor do JSON recebido.
+            Campos aninhados funcionam com ponto: <code>{{lead.nome}}</code>,
+            <code>{{itens[0].valor}}</code>. Já vêm prontas:
+            <code>{{agora}}</code>, <code>{{data}}</code>, <code>{{hora}}</code>.
+          </p>
+        </div>
 
         <p class="erro" id="erro-webhook" hidden></p>
         <button type="submit" class="botao botao--principal">Criar webhook</button>
@@ -608,9 +660,19 @@ async function telaWebhooks(container) {
 
   await carregarWebhooks();
 
-  $('#form-webhook').addEventListener('submit', async (evento) => {
+  const form = $('#form-webhook');
+
+  // Mostra só o que interessa ao modo escolhido.
+  const alternarModo = () => {
+    const direto = form.modo.value === 'direto';
+    $('#ajuda-direto').hidden = !direto;
+    $('#campos-modelo').hidden = direto;
+  };
+  form.modo.addEventListener('change', alternarModo);
+  alternarModo();
+
+  form.addEventListener('submit', async (evento) => {
     evento.preventDefault();
-    const form = evento.target;
     const erro = $('#erro-webhook');
     erro.hidden = true;
     try {
@@ -620,12 +682,14 @@ async function telaWebhooks(container) {
           nome: form.nome.value,
           tipo: form.tipo.value,
           publico: form.publico.value,
+          modo: form.modo.value,
           modelo_titulo: form.modelo_titulo.value,
           modelo_texto: form.modelo_texto.value,
         },
       });
       avisar('Webhook criado. Copie o endereço e a chave.', 'ok');
       form.reset();
+      alternarModo(); // o reset volta o select ao padrão; a tela acompanha
       await carregarWebhooks();
     } catch (e) {
       erro.textContent = e.message;

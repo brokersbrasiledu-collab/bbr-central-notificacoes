@@ -95,18 +95,13 @@ svg {
   gap: 12px;
 }
 
+/* O emblema é mais largo que alto: fixamos a altura e deixamos a largura
+   acompanhar, para ele não ficar espremido dentro de um quadrado. */
 .marca__selo {
-  width: 38px;
-  height: 38px;
+  height: 34px;
+  width: auto;
   flex: none;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--ouro);
-  border-radius: var(--raio);
-  color: var(--ouro);
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  display: block;
 }
 
 .marca__texto strong,
@@ -131,9 +126,7 @@ svg {
 }
 
 .marca--grande .marca__selo {
-  width: 46px;
-  height: 46px;
-  font-size: 23px;
+  height: 50px;
 }
 
 /* ── Login ─────────────────────────────────────────────────── */
@@ -597,6 +590,15 @@ h2 {
 .tempo__texto {
   color: var(--texto-suave);
   font-size: 14px;
+  /* Mensagens vindas do n8n costumam ter várias linhas. Sem isto, tudo
+     viraria um parágrafo só e o aviso ficaria ilegível. */
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.tempo__texto strong {
+  color: var(--texto);
+  font-weight: 600;
 }
 
 .tempo__meta {

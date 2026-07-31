@@ -45,8 +45,13 @@ CREATE TABLE IF NOT EXISTS webhooks (
   nome             TEXT    NOT NULL,
   slug             TEXT    NOT NULL UNIQUE,
   chave_secreta    TEXT    NOT NULL,
-  modelo_titulo    TEXT    NOT NULL,
-  modelo_texto     TEXT    NOT NULL,
+  -- 'direto'  → o título e o texto vêm prontos no JSON (caso do n8n, que
+  --             já resolveu as variáveis antes de chamar).
+  -- 'modelo'  → o texto é montado aqui a partir de {{variaveis}}.
+  modo             TEXT    NOT NULL DEFAULT 'direto'
+                     CHECK (modo IN ('direto', 'modelo')),
+  modelo_titulo    TEXT    NOT NULL DEFAULT '',
+  modelo_texto     TEXT    NOT NULL DEFAULT '',
   tipo             TEXT    NOT NULL DEFAULT 'lead'
                      CHECK (tipo IN ('lead', 'alerta', 'meta', 'aviso', 'sistema')),
   publico          TEXT    NOT NULL DEFAULT 'todos',

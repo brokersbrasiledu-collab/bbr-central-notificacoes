@@ -66,6 +66,35 @@ export function aplicarModelo(modelo, dados = {}, padrao = '') {
   });
 }
 
+/**
+ * Prepara o texto para a notificação nativa do celular.
+ *
+ * Mensagens escritas no n8n costumam usar o negrito do WhatsApp
+ * (*assim*). O sistema operacional não interpreta isso e mostraria os
+ * asteriscos crus, então eles saem aqui. Dentro do app o histórico
+ * mantém o texto original e renderiza o negrito de verdade.
+ */
+export function paraNotificacao(texto) {
+  return String(texto || '')
+    .replace(/\*([^*\n]+)\*/g, '$1')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim();
+}
+
+/**
+ * Procura o primeiro campo preenchido entre vários nomes possíveis.
+ * Serve para aceitar tanto "titulo" quanto "title", por exemplo — a
+ * ferramenta que dispara não precisa adivinhar o nome exato.
+ */
+export function primeiroCampo(dados, nomes) {
+  for (const nome of nomes) {
+    const valor = dados?.[nome];
+    if (typeof valor === 'string' && valor.trim()) return valor.trim();
+    if (typeof valor === 'number' && Number.isFinite(valor)) return String(valor);
+  }
+  return null;
+}
+
 /** Lista as variáveis usadas num modelo — útil para pré-visualização. */
 export function variaveisDoModelo(modelo) {
   const achadas = new Set();

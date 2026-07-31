@@ -57,6 +57,17 @@ export const PESO_NIVEL = { admin: 3, operador: 2, membro: 1 };
 export const TIPOS = ['lead', 'alerta', 'meta', 'aviso', 'sistema'];
 
 /**
+ * Limites de tamanho.
+ *
+ * O título é o que aparece na tela do celular, então é curto de propósito.
+ * O texto é generoso: o sistema operacional corta o que não couber na
+ * notificação, mas o histórico guarda e mostra tudo — que é justamente
+ * para onde a pessoa vai quando o aviso é grande demais para a prévia.
+ */
+export const LIMITE_TITULO = 120;
+export const LIMITE_TEXTO = 2000;
+
+/**
  * Valida a configuração mínima na subida do servidor.
  * Devolve a lista de problemas encontrados (vazia = tudo certo).
  */
