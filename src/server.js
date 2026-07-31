@@ -67,8 +67,18 @@ app.use('/api/usuarios', rotasUsuarios);
 // Endereço público dos gatilhos: https://seu-dominio/hook/<slug>
 app.use('/hook', rotasGatilho);
 
+/**
+ * Diagnóstico rápido, aberto sem login.
+ * A "versao" é o commit que gerou a imagem — abrir esta rota no navegador
+ * é o jeito de confirmar que o deploy novo realmente subiu na VPS.
+ */
 app.get('/api/saude', (_req, res) => {
-  res.json({ ok: true, push: pushPronto, ambiente: config.ambiente });
+  res.json({
+    ok: true,
+    versao: config.versao,
+    push: pushPronto,
+    ambiente: config.ambiente,
+  });
 });
 
 // ── PWA (arquivos estáticos) ────────────────────────────────────
@@ -138,6 +148,7 @@ app.use((erro, _req, res, _proximo) => {
 
 app.listen(config.porta, () => {
   console.log(`\n  Central de Notificações — Brokers Brasil`);
+  console.log(`  ├─ versão   : ${config.versao}`);
   console.log(`  ├─ ambiente : ${config.ambiente}`);
   console.log(`  ├─ endereço : ${config.appUrl}`);
   console.log(`  ├─ porta    : ${config.porta}`);

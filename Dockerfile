@@ -17,6 +17,12 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY . .
 
+# Identificação da build. O GitHub Actions injeta aqui o commit que gerou
+# esta imagem, e o app devolve o valor em /api/saude — é assim que se
+# confirma, pelo navegador, qual versão está de fato rodando na VPS.
+ARG VERSAO=local
+ENV VERSAO=$VERSAO
+
 # Pasta do banco criada com o dono certo. O volume nomeado herda estas
 # permissões na primeira montagem — sem isso o container não gravaria nada.
 RUN mkdir -p /dados && chown -R node:node /dados /app

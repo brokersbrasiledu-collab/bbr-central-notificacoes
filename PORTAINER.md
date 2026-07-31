@@ -10,6 +10,29 @@ exatamente como estava.
 
 ---
 
+## ⚠️ Antes do próximo "Pull and redeploy"
+
+Se você corrigiu a regra do Traefik **direto na stack**, saiba que o *Pull and
+redeploy* busca o `docker-compose.yml` do GitHub de novo e **descarta essa
+edição manual**.
+
+Para a correção sobreviver, ela precisa estar nas **variáveis da stack**, não
+no arquivo. Abra **Stacks → `bbr-push` → Editor** e confirme que existe, em
+*Environment variables*:
+
+```
+DOMINIO=avisos.seudominio.com.br
+```
+
+Só o host: **sem** `https://` e **sem** barra no fim.
+
+Se estiver faltando, o deploy agora **falha na hora**, com a mensagem
+`defina DOMINIO nas variaveis da stack`. É proposital: antes, a variável vazia
+gerava uma rota quebrada e o sintoma aparecia lá na frente como um `404` com
+erro de certificado — difícil de ligar à causa.
+
+---
+
 ## Já está pronto
 
 | | Estado |
@@ -111,14 +134,43 @@ Confirme em **Aparelho** → **Enviar teste**.
 
 ### Atualizar o app
 
-1. Envie os arquivos novos para o GitHub
-2. Aba **Actions** do repositório: espere o ✓ verde (leva ~1 minuto)
-3. Portainer → **Stacks** → `bbr-push` → **Update the stack**, com
-   **Re-pull image** ligado
+O ciclo tem três etapas, e só a última é sua:
 
-O volume não é tocado: contas, aparelhos e histórico continuam lá. Testei esse
-ciclo — o app antigo desliga **antes** de o novo subir, então nunca há dois
-processos escrevendo no banco ao mesmo tempo.
+| | Quem faz |
+| --- | --- |
+| 1. Alterar o código e enviar ao GitHub | eu |
+| 2. Construir e publicar a imagem nova | automático (~1 min) |
+| 3. **Portainer → Stacks → `bbr-push` → Pull and redeploy** | você |
+
+O volume não é tocado: contas, aparelhos e histórico continuam lá. O app antigo
+desliga **antes** de o novo subir, então nunca há dois processos escrevendo no
+banco ao mesmo tempo.
+
+> **Não precisa do "Re-pull image"** (que é recurso pago). Em Swarm, o
+> `docker stack deploy` consulta o registro e fixa a imagem pelo digest a cada
+> deploy — digest novo, tarefa nova.
+
+### Confirmar que a versão nova subiu
+
+Abra no navegador:
+
+```
+https://SEU-DOMINIO/api/saude
+```
+
+Resposta:
+
+```json
+{ "ok": true, "versao": "a1b2c3d", "push": true, "ambiente": "production" }
+```
+
+O campo `versao` é o commit que gerou a imagem em execução. Compare com o
+commit mais recente no GitHub: se bater, a VPS está com a versão nova. Se não
+bater depois de alguns minutos, me avise — troco a estratégia para etiquetas
+fixas de versão, que forçam a atualização.
+
+Vale conferir isso **antes** de reportar que uma correção não funcionou. Quase
+sempre é o deploy que ainda não subiu, não o código.
 
 ### Fazer backup
 

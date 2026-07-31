@@ -16,7 +16,12 @@ services:
   bbr-push:
     # O Swarm não compila imagem: ela vem pronta do GitHub Container
     # Registry, publicada automaticamente a cada atualização do código.
-    image: ${IMAGEM}
+    #
+    # A sintaxe ":?" torna a variável obrigatória: se ela faltar, o deploy
+    # falha na hora com essa mensagem. Sem isso, uma variável esquecida
+    # produz um valor vazio e o erro só aparece depois, disfarçado —
+    # foi exatamente o que aconteceu com o DOMINIO e gerou o 404.
+    image: ${IMAGEM:?defina IMAGEM nas variaveis da stack}
 
     environment:
       # ── Fixos: não precisa mexer ──────────────────────────────
@@ -26,14 +31,14 @@ services:
       TRUST_PROXY: 1 # o Traefik entrega o IP real do visitante
 
       # ── Preenchidos no painel do Portainer ────────────────────
-      APP_URL: ${APP_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
-      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
-      VAPID_SUBJECT: ${VAPID_SUBJECT}
-      ADMIN_NOME: ${ADMIN_NOME}
-      ADMIN_EMAIL: ${ADMIN_EMAIL}
-      ADMIN_SENHA: ${ADMIN_SENHA}
+      APP_URL: ${APP_URL:?defina APP_URL nas variaveis da stack}
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET nas variaveis da stack}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?defina VAPID_PUBLIC_KEY nas variaveis da stack}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?defina VAPID_PRIVATE_KEY nas variaveis da stack}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:contato@brokersbrasil.com.br}
+      ADMIN_NOME: ${ADMIN_NOME:-Administrador}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?defina ADMIN_EMAIL nas variaveis da stack}
+      ADMIN_SENHA: ${ADMIN_SENHA:?defina ADMIN_SENHA nas variaveis da stack}
 
     volumes:
       # O banco mora aqui. O volume sobrevive a atualizações da stack:
@@ -82,8 +87,9 @@ services:
         - traefik.enable=true
         - traefik.docker.network=AutoNet
 
-        # Qual endereço responde por este app
-        - traefik.http.routers.bbrpush.rule=Host(`${DOMINIO}`)
+        # Qual endereço responde por este app.
+        # Só o host: sem "https://" e sem barra no fim.
+        - traefik.http.routers.bbrpush.rule=Host(`${DOMINIO:?defina DOMINIO nas variaveis da stack}`)
         - traefik.http.routers.bbrpush.entrypoints=websecure
 
         # HTTPS com certificado automático.

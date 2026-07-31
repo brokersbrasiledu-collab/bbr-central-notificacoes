@@ -54,6 +54,11 @@ jobs:
           push: true
           # A VPS é x86, então a imagem é construída para essa arquitetura.
           platforms: linux/amd64
+          # Carimba a imagem com o commit que a gerou. O app mostra este
+          # valor em /api/saude, o que permite conferir pelo navegador se
+          # a VPS já está rodando a versão nova.
+          build-args: |
+            VERSAO=${{ github.sha }}
           tags: |
             ${{ steps.nome.outputs.imagem }}:latest
             ${{ steps.nome.outputs.imagem }}:${{ github.sha }}

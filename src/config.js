@@ -17,6 +17,10 @@ const bool = (v, padrao = false) =>
 export const config = {
   porta: Number(process.env.PORT || 3000),
   ambiente: process.env.NODE_ENV || 'development',
+
+  // Commit que gerou a imagem, injetado no build. Fica curto para caber
+  // na conferência rápida em /api/saude.
+  versao: (process.env.VERSAO || 'local').slice(0, 7),
   producao: process.env.NODE_ENV === 'production',
   appUrl: (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, ''),
   confiarProxy: bool(process.env.TRUST_PROXY),
