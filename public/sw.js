@@ -9,11 +9,12 @@
    ──────────────────────────────────────────────────────────────── */
 
 const VERSAO = 'bbr-v1';
+// O app.js e o estilos.css NÃO entram aqui: eles são pedidos com "?v=versao"
+// e o próprio interceptador de rede guarda a versão certa quando ela chega.
+// Listá-los sem a versão só encheria o cache com um arquivo que ninguém pede.
 const CASCA = [
   '/',
   '/index.html',
-  '/estilos.css',
-  '/app.js',
   '/manifest.json',
   '/icones/marca.png', // logo da interface
   '/icones/icone-192.png', // usada na própria notificação

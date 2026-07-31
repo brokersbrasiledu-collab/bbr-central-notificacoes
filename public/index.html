@@ -25,7 +25,9 @@
     <meta name="apple-mobile-web-app-title" content="BBR Avisos" />
     <link rel="apple-touch-icon" href="/icones/apple-touch-icon.png" />
 
-    <link rel="stylesheet" href="/estilos.css" />
+    <!-- O ?v= é trocado pelo servidor pela versão da build. Cada deploy gera
+         uma URL nova, então o navegador nunca reaproveita o arquivo antigo. -->
+    <link rel="stylesheet" href="/estilos.css?v=__VERSAO__" />
   </head>
 
   <body>
@@ -124,6 +126,6 @@
     <!-- Avisos rápidos (toast) -->
     <div id="avisos" class="avisos" aria-live="polite"></div>
 
-    <script src="/app.js" type="module"></script>
+    <script src="/app.js?v=__VERSAO__" type="module"></script>
   </body>
 </html>

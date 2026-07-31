@@ -105,6 +105,29 @@ app.get('/sw.js', (_req, res) => {
 });
 
 /**
+ * O index.html carimbado com a versão da build.
+ *
+ * As tags de <script> e <link> apontam para "/app.js?v=<versao>". A cada
+ * deploy o endereço muda, então o navegador é obrigado a buscar o arquivo
+ * novo — mesmo que ainda tenha o antigo guardado com validade longa.
+ *
+ * Sem isto, corrigir a política de cache não bastaria: a cópia antiga
+ * continuaria valendo até vencer, e o deploy pareceria não ter funcionado.
+ */
+const indexServido = fs
+  .readFileSync(path.join(PUBLICO, 'index.html'), 'utf8')
+  .replaceAll('__VERSAO__', config.versao);
+
+function enviarApp(_req, res) {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html');
+  res.send(indexServido);
+}
+
+app.get('/', enviarApp);
+app.get('/index.html', enviarApp);
+
+/**
  * O iOS e alguns navegadores procuram estes arquivos direto na raiz,
  * ignorando as tags do HTML. Sem os atalhos abaixo eles receberiam o
  * index.html do app e mostrariam um ícone quebrado.
@@ -148,8 +171,7 @@ app.use(
 // Qualquer outra rota devolve o app (navegação por hash acontece no cliente).
 app.get('*', (req, res, proximo) => {
   if (req.path.startsWith('/api/') || req.path.startsWith('/hook/')) return proximo();
-  res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(path.join(PUBLICO, 'index.html'));
+  return enviarApp(req, res);
 });
 
 // ── Erros ───────────────────────────────────────────────────────
