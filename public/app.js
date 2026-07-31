@@ -41,14 +41,54 @@ async function api(caminho, opcoes = {}) {
 }
 
 /**
+ * Endereços dentro do texto. Aceita "https://..." e também "www.algo.com",
+ * que é como muita gente cola. O "<" fica de fora do conjunto para o
+ * endereço nunca engolir uma tag inserida antes.
+ */
+const PADRAO_LINK = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+
+/**
+ * Transforma endereços em links clicáveis.
+ *
+ * Roda DEPOIS do escape, então o que chega aqui já é HTML seguro: aspas
+ * viraram &quot; e não há como escapar do atributo. E como o padrão só
+ * casa http/https (ou www), não existe caminho para um "javascript:".
+ */
+function comLinks(html) {
+  return html.replace(PADRAO_LINK, (achado) => {
+    // Um "<" do texto original chega aqui como &lt;, então não serve de
+    // fronteira no padrão. Cortamos manualmente para o endereço não
+    // engolir o que vinha depois dele.
+    const marcaTag = achado.search(/&lt;|&gt;/);
+    const bruto = marcaTag > 0 ? achado.slice(0, marcaTag) : achado;
+    const resto = marcaTag > 0 ? achado.slice(marcaTag) : '';
+
+    // Pontuação no fim costuma ser da frase, não do endereço:
+    // "veja em https://site.com." não deve levar o ponto para o link.
+    const sobra = bruto.match(/(&quot;|&#39;|[.,;:!?)\]}])+$/);
+    const url = sobra ? bruto.slice(0, -sobra[0].length) : bruto;
+    if (!url) return achado;
+
+    const destino = url.toLowerCase().startsWith('www.') ? `https://${url}` : url;
+    return (
+      `<a href="${destino}" target="_blank" rel="noopener noreferrer">${url}</a>` +
+      (sobra ? sobra[0] : '') +
+      resto
+    );
+  });
+}
+
+/**
  * Prepara a mensagem para exibição no histórico.
  *
- * Escapa primeiro (segurança) e só então converte o negrito *assim* —
- * o mesmo que se escreve no n8n ou no WhatsApp. As quebras de linha são
- * preservadas pelo CSS (white-space: pre-line).
+ * A ordem importa: escapar (segurança) → negrito → links. Fazendo o
+ * negrito antes, as únicas tags presentes quando os links são procurados
+ * são <strong>, que não contêm endereço nenhum.
  */
 function formatarMensagem(texto) {
-  return esc(texto).replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>');
+  const escapado = esc(texto);
+  const comNegrito = escapado.replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>');
+  return comLinks(comNegrito);
 }
 
 /** Impede que texto vindo do banco seja interpretado como HTML. */

@@ -615,6 +615,21 @@ h2 {
   font-weight: 600;
 }
 
+/* Links dentro da mensagem. A área de toque ganha folga vertical para
+   funcionar bem no dedo, sem afastar as linhas do texto. */
+.aviso__texto a {
+  color: var(--ouro);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  padding: 3px 0;
+  overflow-wrap: anywhere;
+}
+
+.aviso__texto a:hover {
+  text-decoration-thickness: 2px;
+}
+
 .aviso__rodape {
   margin-top: 12px;
   padding-top: 10px;
