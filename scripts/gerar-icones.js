@@ -28,15 +28,13 @@ const PRETO = [0x14, 0x14, 0x14];
 
 fs.mkdirSync(DESTINO, { recursive: true });
 
-// ── 1. Ícones prontos, copiados como estão ──────────────────────
+// ── 1. Arquivos que vão como estão ──────────────────────────────
+// Só os formatos de aba do navegador. O .ico e o .svg podem ter
+// transparência sem problema: ali ela se mistura com a cor da aba.
 
 const COPIAR = [
   ['favicon.ico', 'favicon.ico'],
   ['favicon.svg', 'favicon.svg'],
-  ['favicon-96x96.png', 'favicon-96.png'],
-  ['apple-touch-icon.png', 'apple-touch-icon.png'],
-  ['web-app-manifest-192x192.png', 'icone-192.png'],
-  ['web-app-manifest-512x512.png', 'icone-512.png'],
 ];
 
 console.log();
@@ -48,7 +46,7 @@ for (const [origem, destino] of COPIAR) {
   }
   fs.copyFileSync(de, path.join(DESTINO, destino));
   const kb = (fs.statSync(de).size / 1024).toFixed(1);
-  console.log(`  ✓ ${destino.padEnd(24)} ${kb.padStart(7)} kB  (da pasta marca/favicon)`);
+  console.log(`  ✓ ${destino.padEnd(24)} ${kb.padStart(7)} kB  (copiado)`);
 }
 
 // ── 2. Recorta o emblema da arte original ───────────────────────
@@ -108,10 +106,26 @@ function montar(lado, ocupacao, comFundo) {
   return escreverPNG(lado, lado, base.rgba);
 }
 
+/**
+ * Todos os ícones de aplicativo são gerados aqui, e todos são quadrados
+ * OPACOS, preenchendo a arte até a borda.
+ *
+ * Isso não é preciosismo: a arte original é retangular (433×520), então
+ * encaixá-la num quadrado deixa faixas transparentes nas laterais. O iOS
+ * pinta transparência de branco antes de aplicar o recorte arredondado —
+ * o resultado é um ícone com bordas brancas na tela inicial.
+ */
 const DERIVADOS = [
-  // 58% deixa a marca dentro da área segura de 80% que o Android exige.
+  ['apple-touch-icon.png', () => montar(180, 0.76, true)],
+  ['icone-192.png', () => montar(192, 0.78, true)],
+  ['icone-512.png', () => montar(512, 0.78, true)],
+  // 58% deixa a marca dentro da área segura de 80% que o Android exige
+  // ao recortar o ícone em círculo ou squircle.
   ['icone-maskable-512.png', () => montar(512, 0.58, true)],
-  // Sem fundo, para a interface do app.
+  // Ícone da aba: fundo escuro também, para o dourado ter contraste numa
+  // barra de abas clara.
+  ['favicon-96.png', () => montar(96, 0.84, true)],
+  // Única sem fundo: usada dentro da interface do app.
   ['marca.png', () => montar(256, 1.0, false)],
 ];
 
