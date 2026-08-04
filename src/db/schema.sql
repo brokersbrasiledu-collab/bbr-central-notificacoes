@@ -48,10 +48,42 @@ CREATE INDEX IF NOT EXISTS idx_aparelhos_usuario ON aparelhos(usuario_id);
 -- compartilhado por todo o time.
 CREATE TABLE IF NOT EXISTS preferencias_tipo (
   usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  tipo       TEXT    NOT NULL
-               CHECK (tipo IN ('lead', 'alerta', 'meta', 'aviso', 'sistema')),
+  tipo       TEXT    NOT NULL,
   PRIMARY KEY (usuario_id, tipo)
 );
+
+-- ── tipos ───────────────────────────────────────────────────────
+-- As categorias de notificação. Ficam em tabela, e não fixas no código,
+-- porque o administrador cria as suas — e cada categoria nova aparece
+-- sozinha na tela de preferências para o time ligar ou silenciar.
+--
+-- Nenhuma outra tabela declara CHECK sobre "tipo": uma lista fixa lá
+-- impediria justamente a criação de categorias novas. A validação é
+-- feita na aplicação, contra esta tabela.
+CREATE TABLE IF NOT EXISTS tipos (
+  chave       TEXT    PRIMARY KEY,   -- identificador curto, sem acento
+  rotulo      TEXT    NOT NULL,      -- como aparece na tela
+  descricao   TEXT    NOT NULL DEFAULT '',
+  cor         TEXT    NOT NULL DEFAULT 'neutro'
+                CHECK (cor IN ('ouro', 'vermelho', 'verde', 'azul', 'neutro')),
+  -- Categorias de fábrica não podem ser excluídas: webhooks e integrações
+  -- já criadas dependem delas.
+  fixo        INTEGER NOT NULL DEFAULT 0,
+  -- 'sistema' não é silenciável, senão o botão "enviar teste" pareceria
+  -- quebrado para quem tivesse desligado.
+  silenciavel INTEGER NOT NULL DEFAULT 1,
+  ordem       INTEGER NOT NULL DEFAULT 100,
+  criado_em   TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Categorias de fábrica. INSERT OR IGNORE: quem já tem o banco criado
+-- não perde as personalizações feitas nelas.
+INSERT OR IGNORE INTO tipos (chave, rotulo, descricao, cor, fixo, silenciavel, ordem) VALUES
+  ('lead',    'Lead',    'Lead novo entrando no funil',            'ouro',     1, 1, 10),
+  ('meta',    'Meta',    'Meta batida, venda aprovada',            'verde',    1, 1, 20),
+  ('alerta',  'Alerta',  'Automação parada, erro que precisa de atenção', 'vermelho', 1, 1, 30),
+  ('aviso',   'Aviso',   'Comunicados do time',                    'neutro',   1, 1, 40),
+  ('sistema', 'Sistema', 'Mensagens do próprio aplicativo',        'azul',     1, 0, 50);
 
 -- ── webhooks ────────────────────────────────────────────────────
 -- Gatilhos automáticos. Cada um tem um endereço único (slug), uma
@@ -68,8 +100,7 @@ CREATE TABLE IF NOT EXISTS webhooks (
                      CHECK (modo IN ('direto', 'modelo')),
   modelo_titulo    TEXT    NOT NULL DEFAULT '',
   modelo_texto     TEXT    NOT NULL DEFAULT '',
-  tipo             TEXT    NOT NULL DEFAULT 'lead'
-                     CHECK (tipo IN ('lead', 'alerta', 'meta', 'aviso', 'sistema')),
+  tipo             TEXT    NOT NULL DEFAULT 'lead',
   publico          TEXT    NOT NULL DEFAULT 'todos',
   ativo            INTEGER NOT NULL DEFAULT 1,
   criado_em        TEXT    NOT NULL DEFAULT (datetime('now')),
@@ -85,8 +116,7 @@ CREATE TABLE IF NOT EXISTS notificacoes (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   titulo      TEXT    NOT NULL,
   texto       TEXT    NOT NULL,
-  tipo        TEXT    NOT NULL DEFAULT 'aviso'
-                CHECK (tipo IN ('lead', 'alerta', 'meta', 'aviso', 'sistema')),
+  tipo        TEXT    NOT NULL DEFAULT 'aviso',
   origem      TEXT    NOT NULL DEFAULT 'manual'
                 CHECK (origem IN ('manual', 'webhook', 'sistema')),
   webhook_id  INTEGER REFERENCES webhooks(id) ON DELETE SET NULL,

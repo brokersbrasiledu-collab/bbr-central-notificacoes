@@ -9,7 +9,8 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { db } from '../db/index.js';
-import { config, TIPOS, LIMITE_TITULO, LIMITE_TEXTO } from '../config.js';
+import { config, LIMITE_TITULO, LIMITE_TEXTO } from '../config.js';
+import { tipoExiste } from '../servicos/tipos.js';
 import { exigirNivel } from '../middlewares/auth.js';
 import { publicarNotificacao } from '../servicos/push.js';
 import { aplicarModelo, variaveisDisponiveis, primeiroCampo } from '../servicos/modelo.js';
@@ -48,7 +49,7 @@ rotasWebhooks.post('/', (req, res) => {
   const modo = req.body?.modo === 'modelo' ? 'modelo' : 'direto';
   const modeloTitulo = String(req.body?.modelo_titulo || '').trim();
   const modeloTexto = String(req.body?.modelo_texto || '').trim();
-  const tipo = TIPOS.includes(req.body?.tipo) ? req.body.tipo : 'lead';
+  const tipo = tipoExiste(req.body?.tipo) ? req.body.tipo : 'lead';
   const publico = String(req.body?.publico || 'todos').trim();
 
   if (!nome) return res.status(400).json({ erro: 'Dê um nome ao webhook.' });
@@ -95,7 +96,7 @@ rotasWebhooks.patch('/:id', (req, res) => {
       req.body?.modelo_texto !== undefined
         ? String(req.body.modelo_texto).trim()
         : atual.modelo_texto,
-    tipo: TIPOS.includes(req.body?.tipo) ? req.body.tipo : atual.tipo,
+    tipo: tipoExiste(req.body?.tipo) ? req.body.tipo : atual.tipo,
     publico: req.body?.publico !== undefined ? String(req.body.publico).trim() : atual.publico,
     ativo: req.body?.ativo !== undefined ? (req.body.ativo ? 1 : 0) : atual.ativo,
   };
@@ -246,7 +247,7 @@ async function dispararGatilho(req, res) {
 
   // O tipo pode vir no próprio evento — assim um mesmo gatilho serve para
   // avisos de naturezas diferentes, sem precisar criar vários webhooks.
-  const tipo = TIPOS.includes(dados.tipo) ? dados.tipo : webhook.tipo;
+  const tipo = tipoExiste(dados.tipo) ? dados.tipo : webhook.tipo;
 
   const resultado = await publicarNotificacao({
     titulo: titulo.slice(0, LIMITE_TITULO),

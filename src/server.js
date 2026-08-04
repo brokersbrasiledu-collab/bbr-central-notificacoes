@@ -20,6 +20,7 @@ import { rotasPush } from './rotas/push.js';
 import { rotasNotificacoes } from './rotas/notificacoes.js';
 import { rotasWebhooks, rotasGatilho } from './rotas/webhooks.js';
 import { rotasUsuarios } from './rotas/usuarios.js';
+import { rotasTipos } from './rotas/tipos.js';
 
 // ── Checagem de configuração ────────────────────────────────────
 const problemas = validarConfig();
@@ -64,6 +65,7 @@ app.use('/api/push', rotasPush);
 app.use('/api/notificacoes', rotasNotificacoes);
 app.use('/api/webhooks', rotasWebhooks);
 app.use('/api/usuarios', rotasUsuarios);
+app.use('/api/tipos', rotasTipos);
 
 // Endereço público dos gatilhos: https://seu-dominio/hook/<slug>
 app.use('/hook', rotasGatilho);

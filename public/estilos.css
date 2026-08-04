@@ -20,6 +20,7 @@
   --ouro-tenue: rgba(176, 164, 115, 0.12);
   --vermelho: #c96a5c;
   --verde: #7f9a72;
+  --azul: #6e8ca8;
 
   --raio: 10px;
   --raio-g: 16px;
@@ -569,14 +570,22 @@ h2 {
   background: var(--superficie);
 }
 
-/* O acento da esquerda é o que diferencia o tipo de relance. */
-.aviso--lead,
-.aviso--meta {
+/* O acento da esquerda é o que diferencia a categoria de relance.
+   Segue a cor escolhida no painel, não o nome da categoria. */
+.aviso--ouro {
   border-left-color: var(--ouro);
 }
 
-.aviso--alerta {
+.aviso--verde {
+  border-left-color: var(--verde);
+}
+
+.aviso--vermelho {
   border-left-color: var(--vermelho);
+}
+
+.aviso--azul {
+  border-left-color: var(--azul);
 }
 
 .aviso__topo {
@@ -652,15 +661,129 @@ h2 {
   color: var(--texto-suave);
 }
 
-.etiqueta--lead,
-.etiqueta--meta {
+/* As cores acompanham a categoria, não um nome fixo: o administrador
+   cria categorias novas e escolhe uma destas cinco. */
+.etiqueta--ouro {
   border-color: rgba(176, 164, 115, 0.45);
   color: var(--ouro);
 }
 
-.etiqueta--alerta {
+.etiqueta--verde {
+  border-color: rgba(127, 154, 114, 0.45);
+  color: var(--verde);
+}
+
+.etiqueta--vermelho {
   border-color: rgba(201, 106, 92, 0.45);
   color: var(--vermelho);
+}
+
+.etiqueta--azul {
+  border-color: rgba(110, 140, 168, 0.45);
+  color: var(--azul);
+}
+
+/* ── Excluir do histórico (só administrador) ───────────────── */
+
+.aviso__excluir {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--texto-fraco);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transicao), color var(--transicao), background var(--transicao);
+}
+
+.aviso__excluir svg {
+  width: 15px;
+  height: 15px;
+}
+
+.aviso:hover .aviso__excluir,
+.aviso__excluir:focus-visible {
+  opacity: 1;
+}
+
+.aviso__excluir:hover {
+  background: rgba(201, 106, 92, 0.12);
+  color: var(--vermelho);
+}
+
+/* No toque não existe "passar o mouse": no celular o botão fica sempre
+   visível, apenas discreto. */
+@media (hover: none) {
+  .aviso__excluir {
+    opacity: 0.5;
+  }
+}
+
+/* ── Edição de categorias ──────────────────────────────────── */
+
+/* Uma linha por categoria: etiqueta, nome, cor e ações lado a lado,
+   com a descrição ocupando a linha de baixo. */
+.categoria {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.categoria .etiqueta {
+  grid-row: 1;
+  white-space: nowrap;
+}
+
+.categoria input[name='rotulo'],
+.categoria select[name='cor'] {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.categoria select[name='cor'] {
+  width: auto;
+  min-width: 116px;
+  padding-right: 32px;
+  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+}
+
+/* A descrição vem antes das ações no HTML, para que no celular ela
+   apareça junto do nome. No computador as posições são fixadas para as
+   ações voltarem à primeira linha, ao lado da cor. */
+.categoria input[name='descricao'] {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.categoria__acoes {
+  grid-row: 1;
+  grid-column: 4;
+  display: flex;
+  gap: 6px;
+}
+
+@media (max-width: 760px) {
+  .categoria {
+    grid-template-columns: 1fr;
+  }
+
+  /* Uma coluna só: volta a valer a ordem do HTML. */
+  .categoria input[name='descricao'],
+  .categoria__acoes {
+    grid-row: auto;
+    grid-column: auto;
+  }
+
+  .categoria__acoes {
+    justify-content: flex-end;
+  }
 }
 
 /* ── Listas de configuração (webhooks, acessos) ────────────── */

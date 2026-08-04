@@ -75,20 +75,34 @@ símbolos crus) e viram negrito de verdade dentro do app.
 
 ---
 
-## Tipos disponíveis
+## Categorias
 
-O campo `tipo` define a etiqueta e a cor na linha do tempo:
+O campo `tipo` define a etiqueta e a cor na linha do tempo. Já vêm prontas:
 
 | Valor | Uso | Cor |
 | --- | --- | --- |
 | `lead` | lead novo no funil | ouro |
-| `meta` | meta batida, venda aprovada | ouro |
+| `meta` | meta batida, venda aprovada | verde |
 | `alerta` | automação parada, erro | vermelho |
 | `aviso` | comunicado do time | neutro |
+| `sistema` | mensagens do próprio app | azul |
 
 Se você não mandar `tipo`, vale o que foi escolhido na criação do webhook.
 Mandando no JSON, o **mesmo webhook** serve para vários assuntos — dá para ter
 um só gatilho para a Virtu e diferenciar venda aprovada de pagamento recusado.
+
+### Criando as suas
+
+Em **Tipos**, o administrador cria quantas categorias quiser. A chave é
+derivada do nome: *"Contrato assinado"* vira `contrato-assinado`, e é isso que
+você manda em `tipo`.
+
+Toda categoria nova nasce **ligada para todo o time**, e cada pessoa decide se
+quer receber em **Aparelho → Notificações que você recebe**. Silenciar afeta só
+o push: a notificação continua aparecendo no histórico compartilhado.
+
+Categorias de fábrica podem ser renomeadas e recoloridas, mas não excluídas —
+webhooks e integrações já criadas dependem delas.
 
 ---
 

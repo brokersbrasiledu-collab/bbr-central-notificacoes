@@ -53,8 +53,9 @@ export const NIVEIS = ['admin', 'operador', 'membro'];
 /** Peso de cada nível — usado para checar "tem pelo menos o nível X". */
 export const PESO_NIVEL = { admin: 3, operador: 2, membro: 1 };
 
-/** Tipos de notificação aceitos (usados para cor e rótulo na interface). */
-export const TIPOS = ['lead', 'alerta', 'meta', 'aviso', 'sistema'];
+// As categorias de notificação não moram mais aqui: viraram a tabela
+// "tipos", porque o administrador cria as dele pelo painel.
+// Ver src/servicos/tipos.js.
 
 /**
  * Limites de tamanho.

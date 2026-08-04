@@ -3,7 +3,8 @@
  */
 import { Router } from 'express';
 import { db } from '../db/index.js';
-import { TIPOS, LIMITE_TITULO, LIMITE_TEXTO } from '../config.js';
+import { LIMITE_TITULO, LIMITE_TEXTO } from '../config.js';
+import { tipoExiste } from '../servicos/tipos.js';
 import { exigirLogin, exigirNivel } from '../middlewares/auth.js';
 import { publicarNotificacao, aparelhosDoPublico } from '../servicos/push.js';
 import { inicioDoDiaUTC } from '../servicos/datas.js';
@@ -21,7 +22,7 @@ const PERIODOS = { hoje: 0, '7d': 6, '30d': 29 };
 rotasNotificacoes.get('/', exigirLogin, (req, res) => {
   const limite = Math.min(Math.max(Number(req.query.limite) || 30, 1), 100);
   const antes = Number(req.query.antes) || null;
-  const tipo = TIPOS.includes(req.query.tipo) ? req.query.tipo : null;
+  const tipo = tipoExiste(req.query.tipo) ? req.query.tipo : null;
   const busca = String(req.query.busca || '').trim().slice(0, 80);
   const periodo = Object.hasOwn(PERIODOS, req.query.periodo) ? req.query.periodo : null;
 
@@ -87,7 +88,7 @@ rotasNotificacoes.get('/resumo', exigirLogin, (_req, res) => {
 rotasNotificacoes.post('/enviar', exigirNivel('operador'), async (req, res) => {
   const titulo = String(req.body?.titulo || '').trim();
   const texto = String(req.body?.texto || '').trim();
-  const tipo = TIPOS.includes(req.body?.tipo) ? req.body.tipo : 'aviso';
+  const tipo = tipoExiste(req.body?.tipo) ? req.body.tipo : 'aviso';
   const publico = String(req.body?.publico || 'todos').trim();
 
   if (!titulo) return res.status(400).json({ erro: 'O título é obrigatório.' });
@@ -126,7 +127,7 @@ rotasNotificacoes.post('/enviar', exigirNivel('operador'), async (req, res) => {
 rotasNotificacoes.get('/alcance', exigirNivel('operador'), (req, res) => {
   const publico = String(req.query.publico || 'todos');
   // O tipo importa no cálculo: quem silenciou aquele tipo não entra na conta.
-  const tipo = TIPOS.includes(req.query.tipo) ? req.query.tipo : null;
+  const tipo = tipoExiste(req.query.tipo) ? req.query.tipo : null;
   res.json({ aparelhos: aparelhosDoPublico(publico, tipo).length });
 });
 

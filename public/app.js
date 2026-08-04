@@ -141,13 +141,31 @@ async function copiar(texto, rotulo = 'Copiado') {
   }
 }
 
-const ROTULO_TIPO = {
-  lead: 'Lead',
-  alerta: 'Alerta',
-  meta: 'Meta',
-  aviso: 'Aviso',
-  sistema: 'Sistema',
-};
+/**
+ * As categorias são carregadas do servidor no login e ficam em
+ * estado.tipos. Antes eram uma lista fixa aqui — o administrador agora
+ * cria as dele, então rótulo, cor e descrição têm de vir do banco.
+ */
+const tipoDe = (chave) => estado.tipos.find((t) => t.chave === chave);
+
+/** Nome de exibição. Cai na própria chave se a categoria foi excluída. */
+const rotuloTipo = (chave) => tipoDe(chave)?.rotulo || chave;
+
+/** Cor da etiqueta. "neutro" é o padrão seguro para categoria desconhecida. */
+const corTipo = (chave) => tipoDe(chave)?.cor || 'neutro';
+
+/** Monta as <option> de um seletor de categoria. */
+function opcoesDeTipo(selecionado, { apenas } = {}) {
+  return estado.tipos
+    .filter((t) => !apenas || apenas.includes(t.chave))
+    .map(
+      (t) =>
+        `<option value="${esc(t.chave)}" ${t.chave === selecionado ? 'selected' : ''}>${esc(
+          t.rotulo
+        )}</option>`
+    )
+    .join('');
+}
 
 const ROTULO_NIVEL = { admin: 'Administrador', operador: 'Operador', membro: 'Membro' };
 
@@ -360,10 +378,21 @@ function atualizarFaixa() {
 
 const estado = {
   usuario: null,
+  tipos: [],
   notificacoes: [],
   proximoCursor: null,
   temMais: false,
 };
+
+/** Recarrega as categorias. Chamado no login e ao mexer nelas. */
+async function carregarTipos() {
+  try {
+    const { itens } = await api('/tipos');
+    estado.tipos = itens;
+  } catch {
+    estado.tipos = [];
+  }
+}
 
 const podeEnviar = () => ['admin', 'operador'].includes(estado.usuario?.nivel);
 const ehAdmin = () => estado.usuario?.nivel === 'admin';
@@ -420,10 +449,21 @@ function cartaoAviso(n) {
     : '';
 
   return `
-    <article class="aviso aviso--${esc(n.tipo)}">
+    <article class="aviso aviso--${esc(corTipo(n.tipo))}" data-id="${n.id}">
       <div class="aviso__topo">
-        <span class="etiqueta etiqueta--${esc(n.tipo)}">${esc(ROTULO_TIPO[n.tipo] || n.tipo)}</span>
+        <span class="etiqueta etiqueta--${esc(corTipo(n.tipo))}">${esc(rotuloTipo(n.tipo))}</span>
         <time class="aviso__hora">${esc(horaDe(n.criada_em))}</time>
+        ${
+          ehAdmin()
+            ? `<button type="button" class="aviso__excluir" data-excluir="${n.id}"
+                 title="Excluir do histórico" aria-label="Excluir do histórico">
+                 <svg viewBox="0 0 24 24" aria-hidden="true">
+                   <path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/>
+                   <path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>
+                 </svg>
+               </button>`
+            : ''
+        }
       </div>
       <h3 class="aviso__titulo">${esc(n.titulo)}</h3>
       <p class="aviso__texto">${formatarMensagem(n.texto)}</p>
@@ -455,12 +495,9 @@ function telaHistorico(container) {
         autocomplete="off"
         value="${esc(filtros.busca)}"
       />
-      <select id="f-tipo" class="filtros__campo" aria-label="Filtrar por tipo">
-        <option value="">Todos os tipos</option>
-        ${TIPOS_FILTRO.map(
-          ([valor, rotulo]) =>
-            `<option value="${valor}" ${filtros.tipo === valor ? 'selected' : ''}>${rotulo}</option>`
-        ).join('')}
+      <select id="f-tipo" class="filtros__campo" aria-label="Filtrar por categoria">
+        <option value="">Todas as categorias</option>
+        ${opcoesDeTipo(filtros.tipo)}
       </select>
       <select id="f-periodo" class="filtros__campo" aria-label="Filtrar por período">
         <option value="">Qualquer data</option>
@@ -492,14 +529,6 @@ function telaHistorico(container) {
 
   return carregarNotificacoes(true);
 }
-
-const TIPOS_FILTRO = [
-  ['lead', 'Leads'],
-  ['meta', 'Metas'],
-  ['alerta', 'Alertas'],
-  ['aviso', 'Avisos'],
-  ['sistema', 'Sistema'],
-];
 
 async function carregarNotificacoes(reiniciar = false) {
   const lista = $('#linha-tempo');
@@ -541,12 +570,50 @@ async function carregarNotificacoes(reiniciar = false) {
       )
       .join('');
 
+    // Delegação: um ouvinte só cobre todos os botões de excluir, e
+    // continua valendo depois de "carregar mais" acrescentar itens.
+    if (ehAdmin()) lista.onclick = aoClicarNaLista;
+
     areaMais.innerHTML = temMais
       ? `<button type="button" class="botao" id="botao-mais">Carregar mais</button>`
       : '';
     $('#botao-mais')?.addEventListener('click', () => carregarNotificacoes(false));
   } catch (erro) {
     areaMais.innerHTML = `<p class="erro">${esc(erro.message)}</p>`;
+  }
+}
+
+/**
+ * Excluir uma linha do histórico (só administrador).
+ *
+ * Some da tela na hora, sem recarregar a lista inteira: quem está
+ * limpando testes costuma apagar vários seguidos, e recarregar a cada
+ * clique faria a página pular sob o dedo.
+ */
+async function aoClicarNaLista(evento) {
+  const botao = evento.target.closest('[data-excluir]');
+  if (!botao) return;
+
+  const id = Number(botao.dataset.excluir);
+  const cartao = botao.closest('.aviso');
+  const titulo = cartao?.querySelector('.aviso__titulo')?.textContent || 'esta notificação';
+  if (!confirm(`Excluir "${titulo}" do histórico? Isso não pode ser desfeito.`)) return;
+
+  botao.disabled = true;
+  try {
+    await api(`/notificacoes/${id}`, { metodo: 'DELETE' });
+    estado.notificacoes = estado.notificacoes.filter((n) => n.id !== id);
+
+    const dia = cartao.closest('.dia');
+    cartao.remove();
+    // Bloco de dia que ficou sem nenhum item não deve deixar a data órfã.
+    if (dia && !dia.querySelector('.aviso')) dia.remove();
+
+    if (!estado.notificacoes.length) carregarNotificacoes(true);
+    avisar('Notificação excluída.', 'ok');
+  } catch (erro) {
+    botao.disabled = false;
+    avisar(erro.message, 'erro');
   }
 }
 
@@ -558,12 +625,7 @@ function telaEnviar(container) {
       <div class="linha">
         <label class="campo">
           <span>Tipo</span>
-          <select name="tipo">
-            <option value="aviso">Aviso do time</option>
-            <option value="lead">Lead</option>
-            <option value="alerta">Alerta</option>
-            <option value="meta">Meta</option>
-          </select>
+          <select name="tipo">${opcoesDeTipo('aviso')}</select>
         </label>
         <label class="campo">
           <span>Público alvo</span>
@@ -711,7 +773,7 @@ function cartaoWebhook(w) {
           ${w.ativo ? '' : '<span class="selo-inativo">Desativado</span>'}
           <div class="item__meta">
             <span>${w.modo === 'direto' ? 'JSON pronto' : 'Modelo com variáveis'}</span>
-            <span>${esc(ROTULO_TIPO[w.tipo] || w.tipo)}</span>
+            <span>${esc(rotuloTipo(w.tipo))}</span>
             <span>${esc(rotuloPublico(w.publico))}</span>
             <span>${w.total_disparos} disparo(s)</span>
             <span>${w.ultimo_disparo_em ? `último ${esc(quando(w.ultimo_disparo_em))}` : 'nunca disparado'}</span>
@@ -776,12 +838,7 @@ async function telaWebhooks(container) {
           </label>
           <label class="campo">
             <span>Tipo</span>
-            <select name="tipo">
-              <option value="lead">Lead</option>
-              <option value="alerta">Alerta</option>
-              <option value="meta">Meta</option>
-              <option value="aviso">Aviso</option>
-            </select>
+            <select name="tipo">${opcoesDeTipo('lead')}</select>
           </label>
         </div>
 
@@ -1092,14 +1149,6 @@ async function carregarUsuarios() {
 
 /* ── Este aparelho ─────────────────────────────────────────── */
 
-/** Descrição de cada tipo, para a pessoa saber o que está desligando. */
-const DESCRICAO_TIPO = {
-  lead: 'Lead novo caindo no funil',
-  meta: 'Venda aprovada e meta batida',
-  alerta: 'Automação parada e erros',
-  aviso: 'Comunicados do time',
-};
-
 async function carregarPreferencias() {
   const lista = $('#lista-preferencias');
   if (!lista) return;
@@ -1109,11 +1158,11 @@ async function carregarPreferencias() {
 
     lista.innerHTML = tipos
       .map(
-        ({ tipo, ativo }) => `
+        ({ tipo, rotulo, descricao, cor, ativo }) => `
         <li class="item preferencia">
           <div>
-            <span class="etiqueta etiqueta--${esc(tipo)}">${esc(ROTULO_TIPO[tipo] || tipo)}</span>
-            <p class="preferencia__descricao">${esc(DESCRICAO_TIPO[tipo] || '')}</p>
+            <span class="etiqueta etiqueta--${esc(cor)}">${esc(rotulo || tipo)}</span>
+            <p class="preferencia__descricao">${esc(descricao || '')}</p>
           </div>
           <label class="chave" title="${ativo ? 'Recebendo' : 'Silenciado'}">
             <input type="checkbox" data-tipo="${esc(tipo)}" ${ativo ? 'checked' : ''} />
@@ -1133,8 +1182,8 @@ async function carregarPreferencias() {
         });
         avisar(
           caixa.checked
-            ? `Você voltará a receber "${ROTULO_TIPO[caixa.dataset.tipo]}".`
-            : `"${ROTULO_TIPO[caixa.dataset.tipo]}" silenciado neste celular.`,
+            ? `Você voltará a receber "${rotuloTipo(caixa.dataset.tipo)}".`
+            : `"${rotuloTipo(caixa.dataset.tipo)}" silenciado.`,
           'ok'
         );
       } catch (erro) {
@@ -1274,6 +1323,176 @@ async function telaAparelho(container) {
   });
 }
 
+/* ── Categorias ────────────────────────────────────────────── */
+
+const CORES = [
+  ['ouro', 'Ouro'],
+  ['verde', 'Verde'],
+  ['vermelho', 'Vermelho'],
+  ['azul', 'Azul'],
+  ['neutro', 'Neutro'],
+];
+
+const opcoesDeCor = (atual) =>
+  CORES.map(
+    ([valor, rotulo]) =>
+      `<option value="${valor}" ${valor === atual ? 'selected' : ''}>${rotulo}</option>`
+  ).join('');
+
+function itemCategoria(t) {
+  return `
+    <li class="item" data-chave="${esc(t.chave)}">
+      <form class="categoria">
+        <span class="etiqueta etiqueta--${esc(t.cor)}">${esc(t.rotulo)}</span>
+
+        <input name="rotulo" value="${esc(t.rotulo)}" maxlength="40" aria-label="Nome" />
+        <select name="cor" aria-label="Cor">${opcoesDeCor(t.cor)}</select>
+        <input
+          name="descricao"
+          value="${esc(t.descricao)}"
+          maxlength="140"
+          placeholder="Descrição (aparece na tela de preferências)"
+          aria-label="Descrição"
+        />
+
+        <div class="categoria__acoes">
+          <button type="submit" class="botao botao--pequeno">Salvar</button>
+          ${
+            t.fixo
+              ? ''
+              : '<button type="button" class="botao botao--pequeno botao--perigo" data-excluir>Excluir</button>'
+          }
+        </div>
+      </form>
+      <div class="item__meta">
+        <span><code>${esc(t.chave)}</code></span>
+        ${t.fixo ? '<span>de fábrica</span>' : ''}
+        ${t.silenciavel ? '' : '<span>não pode ser silenciada</span>'}
+      </div>
+    </li>`;
+}
+
+async function telaCategorias(container) {
+  container.innerHTML = `
+    <div class="bloco">
+      <h2>Nova categoria</h2>
+      <form class="formulario" id="form-categoria">
+        <div class="linha">
+          <label class="campo">
+            <span>Nome</span>
+            <input name="rotulo" required maxlength="40" placeholder="Ex.: Contrato assinado" />
+          </label>
+          <label class="campo">
+            <span>Cor</span>
+            <select name="cor">${opcoesDeCor('neutro')}</select>
+          </label>
+        </div>
+        <label class="campo">
+          <span>Descrição</span>
+          <input
+            name="descricao"
+            maxlength="140"
+            placeholder="O que essa categoria avisa (o time vê isso ao ligar ou silenciar)"
+          />
+        </label>
+        <p class="dica">
+          A categoria nasce ligada para todo mundo. Cada pessoa decide se quer
+          receber, em <b>Aparelho</b>. Para disparar pelo n8n, mande a chave em
+          <code>tipo</code>.
+        </p>
+        <p class="erro" id="erro-categoria" hidden></p>
+        <button type="submit" class="botao botao--principal">Criar categoria</button>
+      </form>
+    </div>
+
+    <div class="bloco">
+      <h2>Categorias</h2>
+      <ul class="lista" id="lista-categorias"></ul>
+    </div>`;
+
+  await desenharCategorias();
+
+  $('#form-categoria').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const form = evento.target;
+    const erro = $('#erro-categoria');
+    erro.hidden = true;
+    try {
+      await api('/tipos', {
+        metodo: 'POST',
+        corpo: {
+          rotulo: form.rotulo.value,
+          cor: form.cor.value,
+          descricao: form.descricao.value,
+        },
+      });
+      form.reset();
+      await desenharCategorias();
+      avisar('Categoria criada.', 'ok');
+    } catch (e) {
+      erro.textContent = e.message;
+      erro.hidden = false;
+    }
+  });
+}
+
+async function desenharCategorias() {
+  await carregarTipos();
+  const lista = $('#lista-categorias');
+  if (!lista) return;
+  lista.innerHTML = estado.tipos.map(itemCategoria).join('');
+
+  lista.onsubmit = async (evento) => {
+    evento.preventDefault();
+    const form = evento.target.closest('form');
+    const chave = form.closest('.item').dataset.chave;
+    try {
+      await api(`/tipos/${encodeURIComponent(chave)}`, {
+        metodo: 'PATCH',
+        corpo: {
+          rotulo: form.rotulo.value,
+          cor: form.cor.value,
+          descricao: form.descricao.value,
+        },
+      });
+      await desenharCategorias();
+      avisar('Categoria atualizada.', 'ok');
+    } catch (e) {
+      avisar(e.message, 'erro');
+    }
+  };
+
+  lista.onclick = async (evento) => {
+    const botao = evento.target.closest('[data-excluir]');
+    if (!botao) return;
+
+    const item = botao.closest('.item');
+    const chave = item.dataset.chave;
+    const tipo = tipoDe(chave);
+
+    if (!confirm(`Excluir a categoria "${tipo.rotulo}"?`)) return;
+
+    try {
+      await api(`/tipos/${encodeURIComponent(chave)}`, { metodo: 'DELETE' });
+      await desenharCategorias();
+      avisar('Categoria excluída.', 'ok');
+      return;
+    } catch (e) {
+      // 409 = ainda está em uso. O servidor diz quantos; aqui perguntamos
+      // se pode mover para "Aviso" antes de excluir, para nada sumir.
+      if (e.status !== 409) return avisar(e.message, 'erro');
+      if (!confirm(`${e.message}\n\nMover tudo para "Aviso" e excluir?`)) return;
+      try {
+        await api(`/tipos/${encodeURIComponent(chave)}?mover_para=aviso`, { metodo: 'DELETE' });
+        await desenharCategorias();
+        avisar('Categoria excluída e avisos movidos para "Aviso".', 'ok');
+      } catch (erro2) {
+        avisar(erro2.message, 'erro');
+      }
+    }
+  };
+}
+
 // ─────────────────────────────────────────────────────────────
 // 5. Navegação
 // ─────────────────────────────────────────────────────────────
@@ -1283,6 +1502,7 @@ const ICONES = {
   enviar: '<path d="M4 12l16-8-6 16-2.5-6.5L4 12z"/>',
   webhooks: '<path d="M12 3v6"/><circle cx="12" cy="12" r="3"/><path d="M5 20a7 7 0 0 1 3-9"/><path d="M19 20a7 7 0 0 0-3-9"/>',
   acessos: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M17 8h4"/><path d="M19 6v4"/>',
+  categorias: '<path d="M4 7h7l2 3h7"/><rect x="4" y="7" width="16" height="13" rx="2"/>',
   aparelho: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
 };
 
@@ -1311,6 +1531,12 @@ const TELAS = {
     render: telaAcessos,
     nivel: 'admin',
   },
+  categorias: {
+    titulo: 'Categorias',
+    subtitulo: 'Os tipos de aviso. Cada um pode ser ligado ou silenciado por pessoa.',
+    render: telaCategorias,
+    nivel: 'admin',
+  },
   aparelho: {
     titulo: 'Este aparelho',
     subtitulo: 'Notificações, aparelhos inscritos e sua senha.',
@@ -1327,6 +1553,7 @@ const NOME_MENU = {
   enviar: 'Enviar',
   webhooks: 'Webhooks',
   acessos: 'Acessos',
+  categorias: 'Tipos',
   aparelho: 'Aparelho',
 };
 
@@ -1397,6 +1624,9 @@ async function entrarNoApp(usuario) {
   $('#usuario-atual').querySelector('.usuario__nome').textContent = usuario.nome;
   $('#usuario-atual').querySelector('.usuario__nivel').textContent =
     ROTULO_NIVEL[usuario.nivel] || usuario.nivel;
+
+  // Antes de desenhar qualquer tela: rótulos, cores e filtros dependem disto.
+  await carregarTipos();
 
   montarMenu();
   atualizarFaixa();

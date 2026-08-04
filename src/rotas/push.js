@@ -11,12 +11,13 @@ import { enviarParaAparelhos, vapidPronto } from '../servicos/push.js';
 export const rotasPush = Router();
 
 /**
- * Tipos que a pessoa pode silenciar.
+ * Quais categorias a pessoa pode silenciar sai do banco, não de uma lista
+ * fixa: assim toda categoria criada pelo administrador aparece sozinha
+ * nesta tela, já ligada para todo mundo.
  *
- * "sistema" fica de fora: é o canal dos testes e dos avisos do próprio
- * app. Se desse para silenciar, o botão "enviar teste" pareceria quebrado.
+ * "sistema" nasce como não-silenciável — é o canal dos testes e dos avisos
+ * do próprio app, e desligá-lo faria o botão "enviar teste" parecer quebrado.
  */
-const TIPOS_ESCOLHIVEIS = ['lead', 'alerta', 'meta', 'aviso'];
 
 /**
  * O navegador precisa da chave pública VAPID para criar a subscription.
@@ -92,10 +93,21 @@ rotasPush.get('/preferencias', exigirLogin, (req, res) => {
     .all(req.usuario.id)
     .map((linha) => linha.tipo);
 
+  const escolhiveis = db
+    .prepare(
+      `SELECT chave, rotulo, descricao, cor
+         FROM tipos WHERE silenciavel = 1
+        ORDER BY ordem, rotulo COLLATE NOCASE`
+    )
+    .all();
+
   res.json({
-    tipos: TIPOS_ESCOLHIVEIS.map((tipo) => ({
-      tipo,
-      ativo: !silenciados.includes(tipo),
+    tipos: escolhiveis.map((t) => ({
+      tipo: t.chave,
+      rotulo: t.rotulo,
+      descricao: t.descricao,
+      cor: t.cor,
+      ativo: !silenciados.includes(t.chave),
     })),
   });
 });
@@ -105,8 +117,11 @@ rotasPush.post('/preferencias', exigirLogin, (req, res) => {
   const tipo = req.body?.tipo;
   const ativo = req.body?.ativo !== false;
 
-  if (!TIPOS_ESCOLHIVEIS.includes(tipo)) {
-    return res.status(400).json({ erro: 'Tipo de notificação inválido.' });
+  const escolhivel = db
+    .prepare('SELECT 1 FROM tipos WHERE chave = ? AND silenciavel = 1')
+    .get(String(tipo || ''));
+  if (!escolhivel) {
+    return res.status(400).json({ erro: 'Esta categoria não pode ser silenciada.' });
   }
 
   if (ativo) {
