@@ -37,16 +37,13 @@ const env = Object.fromEntries(
     })
 );
 
-const dominio = process.argv[2] || 'https://avisos.SEUDOMINIO.com.br';
+const dominio = process.argv[2] || 'https://avisos.brokersbrasil.com';
 
 // Segredo de sessão fraco ou de exemplo: gera um novo na hora.
 const segredo =
   env.JWT_SECRET && env.JWT_SECRET.length >= 40 && !env.JWT_SECRET.startsWith('troque')
     ? env.JWT_SECRET
     : crypto.randomBytes(48).toString('hex');
-
-// O Traefik roteia por nome de host, sem o "https://" e sem barra no fim.
-const apenasHost = dominio.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
 
 const linhas = [
   [
@@ -55,7 +52,6 @@ const linhas = [
       'ghcr.io/brokersbrasiledu-collab/bbr-central-notificacoes:latest',
   ],
   ['APP_URL', dominio],
-  ['DOMINIO', apenasHost],
   ['JWT_SECRET', segredo],
   ['VAPID_PUBLIC_KEY', env.VAPID_PUBLIC_KEY || '(faltando — rode: npm run vapid)'],
   ['VAPID_PRIVATE_KEY', env.VAPID_PRIVATE_KEY || '(faltando — rode: npm run vapid)'],
@@ -73,6 +69,8 @@ console.log('  Antes de colar, ajuste duas linhas:');
 console.log('    • IMAGEM      → o endereço que a aba Actions do GitHub mostrou');
 console.log('                    (Passo 3 do PORTAINER.md)');
 console.log('    • ADMIN_SENHA → sua senha de administrador\n');
+console.log('  O domínio do Traefik não entra aqui: ele está escrito direto no');
+console.log('  docker-compose.yml, na regra Host(...).\n');
 console.log('  A VAPID_PRIVATE_KEY é secreta: não mande por WhatsApp nem por e-mail.');
 console.log('  Guarde uma cópia — trocá-la obriga todo o time a reativar a');
 console.log('  notificação no celular.\n');

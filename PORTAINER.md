@@ -10,26 +10,23 @@ exatamente como estava.
 
 ---
 
-## ⚠️ Antes do próximo "Pull and redeploy"
+## O domínio
 
-Se você corrigiu a regra do Traefik **direto na stack**, saiba que o *Pull and
-redeploy* busca o `docker-compose.yml` do GitHub de novo e **descarta essa
-edição manual**.
-
-Para a correção sobreviver, ela precisa estar nas **variáveis da stack**, não
-no arquivo. Abra **Stacks → `bbr-push` → Editor** e confirme que existe, em
-*Environment variables*:
+O endereço está escrito **direto** no `docker-compose.yml`:
 
 ```
-DOMINIO=avisos.seudominio.com.br
+traefik.http.routers.bbrpush.rule=Host(`avisos.brokersbrasil.com`)
 ```
 
-Só o host: **sem** `https://` e **sem** barra no fim.
+Não é variável de propósito. O Portainer já deixou essa variável chegar vazia
+uma vez, e o resultado foi uma rota que o Traefik nunca criou — o site
+respondia `404` com erro de certificado, sem nada no log ligando uma coisa à
+outra. Escrito no arquivo, não há como dar errado, e a correção sobrevive a
+qualquer *Pull and redeploy*.
 
-Se estiver faltando, o deploy agora **falha na hora**, com a mensagem
-`defina DOMINIO nas variaveis da stack`. É proposital: antes, a variável vazia
-gerava uma rota quebrada e o sintoma aparecia lá na frente como um `404` com
-erro de certificado — difícil de ligar à causa.
+**Para trocar de domínio** mexa em dois lugares: nesta linha do
+`docker-compose.yml` e na variável `APP_URL` da stack, que precisa apontar para
+o mesmo endereço (é ela que monta os endereços dos webhooks no painel).
 
 ---
 
@@ -65,7 +62,7 @@ A Let's Encrypt só emite o certificado depois que esse endereço responder.
 Na sua máquina, dentro da pasta do projeto:
 
 ```bash
-npm run variaveis -- https://avisos.seudominio.com.br
+npm run variaveis -- https://avisos.brokersbrasil.com
 ```
 
 Esse é o único comando do guia inteiro, e roda no **seu computador**, não na
@@ -103,7 +100,7 @@ O resto já vem certo, inclusive o endereço da imagem e as chaves de push.
 1. Portainer → **Services**
 2. O serviço `bbr-push_bbr-push` precisa mostrar **1 / 1**
 
-Depois abra `https://avisos.seudominio.com.br`. Se aparecer o cadeado e a tela
+Depois abra `https://avisos.brokersbrasil.com`. Se aparecer o cadeado e a tela
 de login, acabou — o Traefik pediu o certificado sozinho.
 
 Se der erro de certificado, espere 2 minutos e recarregue. A emissão não é
@@ -155,7 +152,7 @@ banco ao mesmo tempo.
 Abra no navegador:
 
 ```
-https://SEU-DOMINIO/api/saude
+https://avisos.brokersbrasil.com/api/saude
 ```
 
 Resposta:
@@ -193,7 +190,7 @@ enviada e toda falha de entrega aparece ali.
 | --- | --- | --- |
 | `network AutoNet not found` | A rede tem outro nome | Portainer → **Networks**, confira o nome exato |
 | Serviço em **0 / 1** | Falta alguma variável | Abra os **Logs** do serviço: a primeira linha diz qual |
-| **404 page not found** no site | O Traefik não casou a rota | O `DOMINIO` precisa ser só o host: sem `https://` e sem barra no fim |
+| **404 page not found** no site | O Traefik não casou a rota | Confira o `Host(...)` no `docker-compose.yml`: só o host, sem `https://` e sem barra no fim |
 | Erro de certificado que não passa | O registro **A** não propagou | Confira o DNS; veja os **Logs** do Traefik |
 | Login funciona no PC mas não no celular | Está entrando por `http` | Use sempre `https://` |
 | iPhone sem o botão de ativar | App ainda não está na tela inicial | Adicione pelo Safari e abra pelo ícone |

@@ -19,8 +19,7 @@ services:
     #
     # A sintaxe ":?" torna a variável obrigatória: se ela faltar, o deploy
     # falha na hora com essa mensagem. Sem isso, uma variável esquecida
-    # produz um valor vazio e o erro só aparece depois, disfarçado —
-    # foi exatamente o que aconteceu com o DOMINIO e gerou o 404.
+    # produz um valor vazio e o erro só aparece depois, disfarçado.
     image: ${IMAGEM:?defina IMAGEM nas variaveis da stack}
 
     environment:
@@ -88,8 +87,11 @@ services:
         - traefik.docker.network=AutoNet
 
         # Qual endereço responde por este app.
-        # Só o host: sem "https://" e sem barra no fim.
-        - traefik.http.routers.bbrpush.rule=Host(`${DOMINIO:?defina DOMINIO nas variaveis da stack}`)
+        # Escrito direto, e não como variável: o Portainer já deixou o
+        # DOMINIO chegar vazio uma vez, e o resultado foi uma rota quebrada
+        # que aparecia como 404 com erro de certificado. Aqui não há como
+        # dar errado. Trocando de domínio, é esta linha (e a APP_URL).
+        - traefik.http.routers.bbrpush.rule=Host(`avisos.brokersbrasil.com`)
         - traefik.http.routers.bbrpush.entrypoints=websecure
 
         # HTTPS com certificado automático.
