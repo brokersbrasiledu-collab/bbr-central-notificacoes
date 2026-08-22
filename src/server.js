@@ -11,7 +11,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 
 import { config, RAIZ, validarConfig } from './config.js';
-import { iniciarBanco } from './db/index.js';
+import { iniciarBanco, db } from './db/index.js';
 import { configurarVapid } from './servicos/push.js';
 import { carregarUsuario } from './middlewares/auth.js';
 
@@ -34,7 +34,21 @@ if (problemas.length) {
   console.error('  (seguindo mesmo assim porque o ambiente é de desenvolvimento)\n');
 }
 
-iniciarBanco();
+/**
+ * Se a preparação do banco falhar, o processo morre em laço de reinício.
+ * A mensagem abaixo é o que aparece no log do Portainer — sem ela, sobra
+ * só um rastro de pilha no meio de um container que reinicia sozinho.
+ */
+try {
+  iniciarBanco();
+} catch (erro) {
+  console.error('\n[falha ao preparar o banco de dados]');
+  console.error('  ' + (erro?.message || erro));
+  console.error('\n  O arquivo fica em: ' + config.dbPath);
+  console.error('  Faça uma cópia dele antes de qualquer tentativa de conserto.\n');
+  process.exit(1);
+}
+
 const pushPronto = configurarVapid();
 
 const app = express();
@@ -194,7 +208,7 @@ app.use((erro, _req, res, _proximo) => {
   res.status(erro.status || 500).json({ erro: 'Erro interno no servidor.' });
 });
 
-app.listen(config.porta, () => {
+const servidor = app.listen(config.porta, () => {
   console.log(`\n  Central de Notificações — Brokers Brasil`);
   console.log(`  ├─ versão   : ${config.versao}`);
   console.log(`  ├─ ambiente : ${config.ambiente}`);
@@ -203,3 +217,49 @@ app.listen(config.porta, () => {
   console.log(`  ├─ banco    : ${config.dbPath}`);
   console.log(`  └─ push     : ${pushPronto ? 'VAPID pronto' : 'SEM chaves VAPID'}\n`);
 });
+
+/**
+ * Desligamento limpo.
+ *
+ * Isto não é refinamento: dentro do container o Node é o PID 1, e o Linux
+ * NÃO aplica a ação padrão de sinal ao PID 1. Sem um tratador explícito, o
+ * SIGTERM que o Docker manda para parar o container é simplesmente
+ * ignorado — o processo continua vivo até o prazo de carência acabar e
+ * levar um SIGKILL, e o container termina com código 137.
+ *
+ * Esse 137 parece falha grave e não é: acontece em todo redeploy. Pior,
+ * esconde as falhas de verdade, porque qualquer parada vira o mesmo código.
+ *
+ * Fechar o banco também importa: em modo WAL, o close consolida o arquivo
+ * .wal no .db. Morrer de SIGKILL deixa esse trabalho para a próxima
+ * abertura fazer sozinha.
+ */
+let desligando = false;
+
+function desligar(sinal) {
+  if (desligando) return;
+  desligando = true;
+  console.log(`\n  ${sinal} recebido — encerrando.`);
+
+  // Rede de segurança: se alguma conexão não fechar, não fica pendurado
+  // até o SIGKILL. unref() para este timer não segurar o processo vivo.
+  const prazo = setTimeout(() => {
+    console.error('  Conexões não fecharam a tempo. Encerrando à força.');
+    process.exit(1);
+  }, 8000);
+  prazo.unref();
+
+  servidor.close(() => {
+    clearTimeout(prazo);
+    try {
+      db.close();
+    } catch (erro) {
+      console.error('  Aviso ao fechar o banco:', erro?.message || erro);
+    }
+    console.log('  Encerrado.\n');
+    process.exit(0);
+  });
+}
+
+process.on('SIGTERM', () => desligar('SIGTERM'));
+process.on('SIGINT', () => desligar('SIGINT'));
