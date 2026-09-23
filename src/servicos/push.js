@@ -49,7 +49,22 @@ export function aparelhosDoPublico(publico = 'todos', tipo = null) {
   const setorDoTipo = tipo
     ? (db.prepare('SELECT setor_id FROM tipos WHERE chave = ?').get(tipo)?.setor_id ?? null)
     : null;
-  const restricaoSetor = setorDoTipo ? ' AND u.setor_id = @setorDoTipo' : '';
+  /*
+   * Quem não pertence a time nenhum recebe as categorias de TODOS os
+   * setores — é a visão de quem acompanha a empresa inteira. Só quem
+   * está em algum time é que passa a receber apenas o dele.
+   *
+   * Isto vale para a categoria. O público alvo continua literal: um envio
+   * marcado como "setor:3" vai só para o setor 3, porque ali a escolha do
+   * destinatário foi explícita.
+   */
+  const restricaoSetor = setorDoTipo
+    ? ` AND (
+          NOT EXISTS (SELECT 1 FROM usuario_setores sem WHERE sem.usuario_id = u.id)
+          OR EXISTS (
+            SELECT 1 FROM usuario_setores us
+             WHERE us.usuario_id = u.id AND us.setor_id = @setorDoTipo))`
+    : '';
 
   // Quem silenciou este tipo sai do envio. A notificação continua no
   // histórico: o filtro é só do push, não do que o time consegue ver.
@@ -84,7 +99,14 @@ export function aparelhosDoPublico(publico = 'todos', tipo = null) {
     if (!ids.length) return [];
     const marcadores = ids.map((_, i) => `@setor${i}`).join(',');
     const params = Object.fromEntries(ids.map((v, i) => [`setor${i}`, v]));
-    return db.prepare(`${base} AND u.setor_id IN (${marcadores})`).all({ ...comuns, ...params });
+    // Basta pertencer a UM dos setores escolhidos.
+    return db
+      .prepare(
+        `${base} AND EXISTS (
+            SELECT 1 FROM usuario_setores us
+             WHERE us.usuario_id = u.id AND us.setor_id IN (${marcadores}))`
+      )
+      .all({ ...comuns, ...params });
   }
 
   if (alvo.startsWith('usuarios:')) {

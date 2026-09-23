@@ -43,17 +43,62 @@ function ajustarColunas() {
     console.log('[migração] tabela setores criada');
   }
 
-  for (const tabela of ['usuarios', 'tipos']) {
-    if (!tabelaExiste(tabela)) continue;
+  // A categoria continua pertencendo a um setor só — é o natural, e não
+  // foi pedido outra coisa.
+  if (tabelaExiste('tipos')) {
     const temSetor = db
-      .prepare(`PRAGMA table_info(${tabela})`)
+      .prepare('PRAGMA table_info(tipos)')
       .all()
       .some((c) => c.name === 'setor_id');
     if (!temSetor) {
       db.exec(
-        `ALTER TABLE ${tabela} ADD COLUMN setor_id INTEGER REFERENCES setores(id) ON DELETE SET NULL`
+        'ALTER TABLE tipos ADD COLUMN setor_id INTEGER REFERENCES setores(id) ON DELETE SET NULL'
       );
-      console.log(`[migração] coluna 'setor_id' adicionada em ${tabela}`);
+      console.log("[migração] coluna 'setor_id' adicionada em tipos");
+    }
+  }
+
+  /*
+   * Pessoa em vários setores.
+   *
+   * O vínculo saiu de uma coluna em usuarios para uma tabela própria.
+   * A migração copia o que já estava lá antes de remover a coluna, então
+   * ninguém perde o time a que pertence.
+   */
+  if (!tabelaExiste('usuario_setores')) {
+    db.exec(`CREATE TABLE usuario_setores (
+      usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      setor_id   INTEGER NOT NULL REFERENCES setores(id) ON DELETE CASCADE,
+      PRIMARY KEY (usuario_id, setor_id)
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_usuario_setores_setor ON usuario_setores(setor_id)');
+    console.log('[migração] tabela usuario_setores criada');
+  }
+
+  const usuariosTemSetorId =
+    tabelaExiste('usuarios') &&
+    db
+      .prepare('PRAGMA table_info(usuarios)')
+      .all()
+      .some((c) => c.name === 'setor_id');
+
+  if (usuariosTemSetorId) {
+    const copiados = db
+      .prepare(
+        `INSERT OR IGNORE INTO usuario_setores (usuario_id, setor_id)
+         SELECT id, setor_id FROM usuarios WHERE setor_id IS NOT NULL`
+      )
+      .run().changes;
+
+    // PRAGMA não vale dentro de transação, por isso fica fora.
+    db.pragma('foreign_keys = OFF');
+    try {
+      db.exec('ALTER TABLE usuarios DROP COLUMN setor_id');
+      console.log(
+        `[migração] vínculos de setor movidos para usuario_setores (${copiados} copiado(s))`
+      );
+    } finally {
+      db.pragma('foreign_keys = ON');
     }
   }
 

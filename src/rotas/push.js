@@ -98,20 +98,33 @@ rotasPush.get('/preferencias', exigirLogin, (req, res) => {
    * as de uso geral (sem setor) e as do setor dela. Mostrar um botão
    * para algo que nunca chegaria seria só confusão.
    */
+  /*
+   * Uma pessoa pode estar em vários setores: valem as categorias de uso
+   * geral mais as de qualquer time a que ela pertença.
+   *
+   * Quem não está em time nenhum vê TODAS — mesma regra da entrega, para
+   * a tela não prometer algo diferente do que o celular recebe.
+   */
+  const meusSetores = (req.usuario.setores || []).map((s) => s.id);
+  const marcadores = meusSetores.map((_, i) => `@s${i}`).join(',');
+  const params = Object.fromEntries(meusSetores.map((v, i) => [`s${i}`, v]));
+  const filtroSetor = marcadores
+    ? ` AND (t.setor_id IS NULL OR t.setor_id IN (${marcadores}))`
+    : '';
+
   const escolhiveis = db
     .prepare(
       `SELECT t.chave, t.rotulo, t.descricao, t.cor, t.setor_id, s.nome AS setor
          FROM tipos t
          LEFT JOIN setores s ON s.id = t.setor_id
-        WHERE t.silenciavel = 1
-          AND (t.setor_id IS NULL OR t.setor_id = @setor)
+        WHERE t.silenciavel = 1${filtroSetor}
         ORDER BY (t.setor_id IS NOT NULL), s.nome COLLATE NOCASE,
                  t.ordem, t.rotulo COLLATE NOCASE`
     )
-    .all({ setor: req.usuario.setor_id ?? null });
+    .all(params);
 
   res.json({
-    setor: req.usuario.setor ?? null,
+    setores: req.usuario.setores || [],
     tipos: escolhiveis.map((t) => ({
       tipo: t.chave,
       rotulo: t.rotulo,

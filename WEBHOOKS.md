@@ -95,8 +95,13 @@ um só gatilho para a Virtu e diferenciar venda aprovada de pagamento recusado.
 ### Categoria de um setor
 
 Marcando uma categoria como sendo de um setor (em **Acessos → Setores** você
-cria os times), ela passa a ser entregue **só a quem é daquele time**, e só
-aparece na tela de preferências dessas pessoas.
+cria os times), ela passa a ser entregue a quem é daquele time — e também a
+quem **não está em time nenhum**, que enxerga a empresa inteira. Quem é de
+outro setor deixa de receber, e a categoria nem aparece na tela de preferências
+dessa pessoa.
+
+Uma pessoa pode estar em **mais de um setor**: recebe as categorias de todos os
+times a que pertence.
 
 Categoria sem setor — o caso de todas as que já estavam no ar — continua indo
 para todo mundo.
@@ -119,6 +124,10 @@ Além da categoria, o próprio evento pode mirar um time:
 O `setor` aceita o nome (sem diferenciar maiúsculas) ou o id. Quando vem, ele
 manda: a notificação vai só para aquele time, ignorando o público cadastrado no
 webhook.
+
+Aqui a regra é literal — vai **só** para quem é do setor, inclusive deixando de
+fora quem não tem setor nenhum. É diferente da categoria: ali o setor é uma
+característica do assunto; aqui é uma escolha explícita de destinatário.
 
 **Valor ausente ou desconhecido é ignorado** e vale o público do webhook. Isso é
 proposital — nenhuma chamada que já funciona pode passar a falhar, nem a mudar

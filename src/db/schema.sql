@@ -31,10 +31,23 @@ CREATE TABLE IF NOT EXISTS usuarios (
                 CHECK (nivel IN ('admin', 'operador', 'membro')),
   ativo       INTEGER NOT NULL DEFAULT 1,
   criado_em   TEXT    NOT NULL DEFAULT (datetime('now')),
-  ultimo_acesso_em TEXT,
-  -- NULL = sem setor. Continua recebendo tudo que não for de setor.
-  setor_id    INTEGER REFERENCES setores(id) ON DELETE SET NULL
+  ultimo_acesso_em TEXT
 );
+
+-- ── usuario_setores ─────────────────────────────────────────────
+-- A quais times cada pessoa pertence. É tabela à parte, e não uma
+-- coluna em usuarios, porque uma pessoa pode estar em mais de um setor
+-- — alguém do comercial que também acompanha o marketing, por exemplo.
+--
+-- Nenhuma linha aqui significa "sem setor": continua recebendo tudo que
+-- não for específico de um time.
+CREATE TABLE IF NOT EXISTS usuario_setores (
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  setor_id   INTEGER NOT NULL REFERENCES setores(id) ON DELETE CASCADE,
+  PRIMARY KEY (usuario_id, setor_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_usuario_setores_setor ON usuario_setores(setor_id);
 
 -- ── aparelhos ───────────────────────────────────────────────────
 -- Uma linha por celular/navegador inscrito no push. O trio

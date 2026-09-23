@@ -73,7 +73,7 @@ rotasSetores.delete('/:id', exigirNivel('admin'), (req, res) => {
   if (!setor) return res.status(404).json({ erro: 'Setor não encontrado.' });
 
   const pessoas = db
-    .prepare('SELECT COUNT(*) AS n FROM usuarios WHERE setor_id = ?')
+    .prepare('SELECT COUNT(*) AS n FROM usuario_setores WHERE setor_id = ?')
     .get(setor.id).n;
   const categorias = db
     .prepare('SELECT COUNT(*) AS n FROM tipos WHERE setor_id = ?')
@@ -96,7 +96,8 @@ rotasSetores.delete('/:id', exigirNivel('admin'), (req, res) => {
     });
   }
 
-  // As referências viram NULL pela própria chave estrangeira.
+  // Os vínculos com pessoas somem em cascata; a categoria que apontava
+  // para cá volta a valer para todos os setores.
   db.prepare('DELETE FROM setores WHERE id = ?').run(setor.id);
 
   res.json({ ok: true, pessoasSemSetor: pessoas, categoriasSemSetor: categorias });

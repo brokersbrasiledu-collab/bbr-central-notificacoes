@@ -43,15 +43,24 @@ export function carregarUsuario(req, _res, proximo) {
   try {
     const dados = jwt.verify(token, config.jwtSegredo);
     const usuario = db
-      .prepare(
-        `SELECT u.id, u.nome, u.email, u.nivel, u.ativo, u.setor_id, s.nome AS setor
-           FROM usuarios u
-           LEFT JOIN setores s ON s.id = u.setor_id
-          WHERE u.id = ?`
-      )
+      .prepare('SELECT id, nome, email, nivel, ativo FROM usuarios WHERE id = ?')
       .get(dados.sub);
+
     // Conta desativada ou apagada depois do login perde a sessão na hora.
-    if (usuario && usuario.ativo) req.usuario = usuario;
+    if (usuario && usuario.ativo) {
+      // Os setores da pessoa acompanham a sessão: a tela de preferências
+      // e o filtro de entrega dependem deles em toda requisição.
+      usuario.setores = db
+        .prepare(
+          `SELECT s.id, s.nome
+             FROM usuario_setores us
+             JOIN setores s ON s.id = us.setor_id
+            WHERE us.usuario_id = ?
+            ORDER BY s.nome COLLATE NOCASE`
+        )
+        .all(usuario.id);
+      req.usuario = usuario;
+    }
   } catch {
     // Token inválido ou expirado: segue como visitante.
   }

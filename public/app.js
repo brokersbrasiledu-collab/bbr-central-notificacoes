@@ -1057,6 +1057,37 @@ async function carregarWebhooks() {
 
 /* ── Acessos ───────────────────────────────────────────────── */
 
+/**
+ * Setores da pessoa como etiquetas removíveis, mais um seletor com o que
+ * ainda falta. Escolhi isto no lugar de um <select multiple> porque o
+ * seletor múltiplo é desconfortável no celular — precisa segurar tecla —
+ * e aqui basta tocar.
+ */
+function chipsDeSetor(u) {
+  const meus = u.setores.map((s) => s.id);
+  const faltam = estado.setores.filter((s) => !meus.includes(s.id));
+
+  const chips = u.setores
+    .map(
+      (s) => `
+      <span class="chip">
+        ${esc(s.nome)}
+        <button type="button" data-acao="tirar-setor" data-setor="${s.id}"
+          title="Tirar de ${esc(s.nome)}" aria-label="Tirar de ${esc(s.nome)}">×</button>
+      </span>`
+    )
+    .join('');
+
+  const adicionar = faltam.length
+    ? `<select data-acao="por-setor" aria-label="Adicionar a um setor">
+         <option value="">+ setor</option>
+         ${faltam.map((s) => `<option value="${s.id}">${esc(s.nome)}</option>`).join('')}
+       </select>`
+    : '';
+
+  return `<div class="chips">${chips}${adicionar}</div>`;
+}
+
 function cartaoUsuario(u, eu) {
   const opcoes = Object.entries(ROTULO_NIVEL)
     .map(
@@ -1074,14 +1105,14 @@ function cartaoUsuario(u, eu) {
           ${u.id === eu ? '<span class="selo-inativo">Você</span>' : ''}
           <div class="item__meta">
             <span>${esc(u.email)}</span>
-            <span>${u.setor ? esc(u.setor) : 'sem setor'}</span>
+            <span>${u.setores.length ? u.setores.map((s) => esc(s.nome)).join(' · ') : 'sem setor'}</span>
             <span>${u.aparelhos} aparelho(s)</span>
             ${u.silenciados ? `<span>${u.silenciados} tipo(s) silenciado(s)</span>` : ''}
             <span>${u.ultimo_acesso_em ? `entrou ${esc(quando(u.ultimo_acesso_em))}` : 'nunca entrou'}</span>
           </div>
         </div>
         <div class="item__acoes">
-          <select data-acao="setor" aria-label="Setor">${opcoesDeSetor(u.setor_id)}</select>
+          ${chipsDeSetor(u)}
           <select data-acao="nivel" aria-label="Nível de acesso">${opcoes}</select>
           <button class="botao botao--pequeno" data-acao="alternar">${u.ativo ? 'Desativar' : 'Ativar'}</button>
           <button class="botao botao--pequeno" data-acao="senha">Nova senha</button>
@@ -1109,8 +1140,8 @@ async function telaAcessos(container) {
         <p class="dica">
           O setor serve para mandar aviso só para um time — no público alvo de
           um envio, de um webhook, ou marcando uma categoria como sendo dele.
-          Quem fica <b>sem setor</b> continua recebendo tudo que não for
-          específico de um time.
+          Uma pessoa pode estar em mais de um setor. Quem fica <b>sem setor
+          nenhum</b> recebe as categorias de <b>todos</b> os times.
         </p>
         <p class="erro" id="erro-setor" hidden></p>
         <button type="submit" class="botao">Criar setor</button>
@@ -1145,10 +1176,24 @@ async function telaAcessos(container) {
             <input name="senha" type="text" minlength="8" required placeholder="mínimo 8 caracteres" />
           </label>
         </div>
-        <label class="campo">
-          <span>Setor</span>
-          <select name="setor_id">${opcoesDeSetor('')}</select>
-        </label>
+        ${
+          estado.setores.length
+            ? `<div class="campo">
+                 <span>Setores</span>
+                 <div class="caixas">
+                   ${estado.setores
+                     .map(
+                       (s) => `<label class="caixa">
+                         <input type="checkbox" name="setores" value="${s.id}" />
+                         <span>${esc(s.nome)}</span>
+                       </label>`
+                     )
+                     .join('')}
+                 </div>
+                 <p class="dica">Pode marcar mais de um. Sem marcar nenhum, a pessoa recebe as categorias de todos os times.</p>
+               </div>`
+            : ''
+        }
         <p class="erro" id="erro-usuario" hidden></p>
         <button type="submit" class="botao botao--principal">Criar conta</button>
       </form>
@@ -1196,7 +1241,7 @@ async function telaAcessos(container) {
           email: form.email.value,
           senha: form.senha.value,
           nivel: form.nivel.value,
-          setor_id: form.setor_id.value,
+          setores: [...form.querySelectorAll('input[name=setores]:checked')].map((c) => c.value),
         },
       });
       avisar('Conta criada.', 'ok');
@@ -1312,14 +1357,16 @@ async function carregarUsuarios() {
         await api(`/usuarios/${id}`, { metodo: 'PATCH', corpo: { nivel: elemento.value } });
         avisar('Nível atualizado.', 'ok');
       }
-      if (acao === 'setor') {
-        await api(`/usuarios/${id}`, { metodo: 'PATCH', corpo: { setor_id: elemento.value } });
-        avisar(
-          elemento.value
-            ? `${usuario.nome} agora é do setor ${setorDe(elemento.value)?.nome}.`
-            : `${usuario.nome} ficou sem setor.`,
-          'ok'
-        );
+      if (acao === 'por-setor' && elemento.value) {
+        const novos = [...usuario.setores.map((s) => s.id), Number(elemento.value)];
+        await api(`/usuarios/${id}`, { metodo: 'PATCH', corpo: { setores: novos } });
+        avisar(`${usuario.nome} entrou em ${setorDe(elemento.value)?.nome}.`, 'ok');
+      }
+      if (acao === 'tirar-setor') {
+        const saindo = Number(elemento.dataset.setor);
+        const novos = usuario.setores.map((s) => s.id).filter((x) => x !== saindo);
+        await api(`/usuarios/${id}`, { metodo: 'PATCH', corpo: { setores: novos } });
+        avisar(`${usuario.nome} saiu de ${setorDe(saindo)?.nome}.`, 'ok');
       }
       if (acao === 'alternar') {
         await api(`/usuarios/${id}`, { metodo: 'PATCH', corpo: { ativo: !usuario.ativo } });
@@ -1627,9 +1674,10 @@ async function telaCategorias(container) {
           <code>tipo</code>.
         </p>
         <p class="dica">
-          Escolhendo um setor, a categoria passa a ser entregue <b>só a quem é
-          daquele time</b> — e só aparece na tela de preferências dessas
-          pessoas. Deixe em "Todos os setores" para o comportamento normal.
+          Escolhendo um setor, a categoria passa a ser entregue <b>a quem é
+          daquele time</b> — e a quem não está em time nenhum, que enxerga a
+          empresa inteira. Quem é de outro setor deixa de receber, e ela nem
+          aparece na tela de preferências dessa pessoa.
         </p>
         <p class="erro" id="erro-categoria" hidden></p>
         <button type="submit" class="botao botao--principal">Criar categoria</button>

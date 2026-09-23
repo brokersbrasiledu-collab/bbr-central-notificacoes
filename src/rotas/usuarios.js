@@ -6,7 +6,32 @@ import bcrypt from 'bcryptjs';
 import { db } from '../db/index.js';
 import { NIVEIS } from '../config.js';
 import { exigirNivel } from '../middlewares/auth.js';
-import { setorIdValido } from '../servicos/setores.js';
+import { resolverSetor } from '../servicos/setores.js';
+
+/**
+ * Normaliza a lista de setores vinda do formulário.
+ * Aceita ids ou nomes, descarta o que não existe e não repete.
+ */
+function idsDeSetores(valor) {
+  const bruto = Array.isArray(valor) ? valor : valor === undefined ? null : [valor];
+  if (!bruto) return null; // campo ausente = não mexer
+  const ids = bruto
+    .map((v) => resolverSetor(v)?.id)
+    .filter((id) => Number.isInteger(id));
+  return [...new Set(ids)];
+}
+
+/** Regrava os vínculos de uma pessoa de uma vez só. */
+function gravarSetores(usuarioId, ids) {
+  const aplicar = db.transaction(() => {
+    db.prepare('DELETE FROM usuario_setores WHERE usuario_id = ?').run(usuarioId);
+    const inserir = db.prepare(
+      'INSERT OR IGNORE INTO usuario_setores (usuario_id, setor_id) VALUES (?, ?)'
+    );
+    for (const id of ids) inserir.run(usuarioId, id);
+  });
+  aplicar();
+}
 
 export const rotasUsuarios = Router();
 
@@ -18,15 +43,28 @@ rotasUsuarios.get('/', (_req, res) => {
   const itens = db
     .prepare(
       `SELECT u.id, u.nome, u.email, u.nivel, u.ativo, u.criado_em, u.ultimo_acesso_em,
-              u.setor_id, s.nome AS setor,
               (SELECT COUNT(*) FROM aparelhos a WHERE a.usuario_id = u.id) AS aparelhos,
               -- Ajuda o admin a entender por que alguém não recebeu um aviso.
               (SELECT COUNT(*) FROM preferencias_tipo p WHERE p.usuario_id = u.id) AS silenciados
          FROM usuarios u
-         LEFT JOIN setores s ON s.id = u.setor_id
-        ORDER BY s.nome COLLATE NOCASE, u.nivel = 'admin' DESC, u.nome COLLATE NOCASE`
+        ORDER BY u.nivel = 'admin' DESC, u.nome COLLATE NOCASE`
     )
     .all();
+
+  // Os setores de cada pessoa, numa consulta só para a tabela inteira.
+  const vinculos = db
+    .prepare(
+      `SELECT us.usuario_id, s.id, s.nome
+         FROM usuario_setores us
+         JOIN setores s ON s.id = us.setor_id
+        ORDER BY s.nome COLLATE NOCASE`
+    )
+    .all();
+
+  for (const u of itens) {
+    u.setores = vinculos.filter((v) => v.usuario_id === u.id).map((v) => ({ id: v.id, nome: v.nome }));
+  }
+
   res.json({ itens });
 });
 
@@ -44,15 +82,15 @@ rotasUsuarios.post('/', (req, res) => {
   const duplicado = db.prepare('SELECT id FROM usuarios WHERE email = ?').get(email);
   if (duplicado) return res.status(409).json({ erro: 'Já existe uma conta com este e-mail.' });
 
-  // Setor é opcional: em branco significa "sem setor", que recebe tudo
-  // que não for específico de um time.
-  const setorId = setorIdValido(req.body?.setor_id);
+  // Setores são opcionais: lista vazia significa "sem setor", que recebe
+  // tudo que não for específico de um time.
+  const setores = idsDeSetores(req.body?.setores ?? req.body?.setor_id) || [];
 
   const info = db
-    .prepare(
-      'INSERT INTO usuarios (nome, email, senha_hash, nivel, setor_id) VALUES (?, ?, ?, ?, ?)'
-    )
-    .run(nome, email, bcrypt.hashSync(senha, 12), nivel, setorId);
+    .prepare('INSERT INTO usuarios (nome, email, senha_hash, nivel) VALUES (?, ?, ?, ?)')
+    .run(nome, email, bcrypt.hashSync(senha, 12), nivel);
+
+  gravarSetores(info.lastInsertRowid, setores);
 
   const usuario = db
     .prepare('SELECT id, nome, email, nivel, ativo, criado_em FROM usuarios WHERE id = ?')
@@ -83,18 +121,17 @@ rotasUsuarios.patch('/:id', (req, res) => {
     }
   }
 
-  // Só mexe no setor se o campo veio na requisição: assim um PATCH que
-  // troca apenas o nível não zera o time da pessoa sem querer.
-  const setorId =
-    req.body?.setor_id !== undefined ? setorIdValido(req.body.setor_id) : atual.setor_id;
-
-  db.prepare('UPDATE usuarios SET nome = ?, nivel = ?, ativo = ?, setor_id = ? WHERE id = ?').run(
+  db.prepare('UPDATE usuarios SET nome = ?, nivel = ?, ativo = ? WHERE id = ?').run(
     nome,
     nivel,
     ativo,
-    setorId,
     id
   );
+
+  // Só mexe nos setores se o campo veio na requisição: assim um PATCH que
+  // troca apenas o nível não desvincula a pessoa dos times sem querer.
+  const setores = idsDeSetores(req.body?.setores ?? req.body?.setor_id);
+  if (setores) gravarSetores(id, setores);
 
   // Conta desativada não deve continuar recebendo push em aparelho antigo.
   if (!ativo) db.prepare('DELETE FROM aparelhos WHERE usuario_id = ?').run(id);

@@ -734,6 +734,90 @@ h2 {
   gap: 10px;
 }
 
+/* ── Setores de uma pessoa ─────────────────────────────────── */
+
+.chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--borda-forte);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--texto-suave);
+  white-space: nowrap;
+}
+
+.chip button {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--texto-fraco);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--transicao);
+}
+
+.chip button:hover {
+  background: rgba(201, 106, 92, 0.16);
+  color: var(--vermelho);
+}
+
+.chips select {
+  width: auto;
+  min-width: 96px;
+  padding: 5px 28px 5px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+  color: var(--texto-fraco);
+  background-position: calc(100% - 13px) 50%, calc(100% - 9px) 50%;
+}
+
+/* Caixas de seleção de setor no formulário de nova conta. */
+.caixas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.caixa {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  background: var(--superficie);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--transicao);
+}
+
+.caixa:has(input:checked) {
+  border-color: var(--ouro);
+  color: var(--ouro);
+}
+
+.caixa input {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--ouro);
+}
+
 /* Cabeçalho do grupo de um setor, na tela de preferências. */
 .preferencia__setor {
   margin: 14px 0 2px;
