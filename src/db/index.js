@@ -28,14 +28,44 @@ function ajustarColunas() {
   const tabelaExiste = (nome) =>
     db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(nome);
 
+  // ── Setores ───────────────────────────────────────────────────
+  // Colunas novas entram com ALTER TABLE, sem recriar nada: é operação
+  // barata e sem risco para os dados. Todas nascem NULL, e NULL significa
+  // exatamente o comportamento anterior — nenhum webhook em produção muda
+  // de público por causa desta migração.
+  if (!tabelaExiste('setores')) {
+    db.exec(`CREATE TABLE setores (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+      descricao TEXT    NOT NULL DEFAULT '',
+      criado_em TEXT    NOT NULL DEFAULT (datetime('now'))
+    )`);
+    console.log('[migração] tabela setores criada');
+  }
+
+  for (const tabela of ['usuarios', 'tipos']) {
+    if (!tabelaExiste(tabela)) continue;
+    const temSetor = db
+      .prepare(`PRAGMA table_info(${tabela})`)
+      .all()
+      .some((c) => c.name === 'setor_id');
+    if (!temSetor) {
+      db.exec(
+        `ALTER TABLE ${tabela} ADD COLUMN setor_id INTEGER REFERENCES setores(id) ON DELETE SET NULL`
+      );
+      console.log(`[migração] coluna 'setor_id' adicionada em ${tabela}`);
+    }
+  }
+
+  // ── Modo do webhook ───────────────────────────────────────────
   if (!tabelaExiste('webhooks')) return;
 
-  const colunas = db
+  const colunasWebhook = db
     .prepare('PRAGMA table_info(webhooks)')
     .all()
     .map((c) => c.name);
 
-  if (!colunas.includes('modo')) {
+  if (!colunasWebhook.includes('modo')) {
     // Webhooks que já existiam foram criados com modelo de variáveis:
     // eles continuam em 'modelo' para não mudarem de comportamento.
     // Os novos nascem em 'direto', que é o padrão do formulário.

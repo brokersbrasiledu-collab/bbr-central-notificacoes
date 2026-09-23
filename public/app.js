@@ -172,6 +172,13 @@ const ROTULO_NIVEL = { admin: 'Administrador', operador: 'Operador', membro: 'Me
 function rotuloPublico(publico) {
   if (!publico || publico === 'todos') return 'Todo o time';
   if (publico.startsWith('usuarios:')) return 'Pessoas específicas';
+  if (publico.startsWith('setor:')) {
+    const nomes = publico
+      .slice('setor:'.length)
+      .split(',')
+      .map((id) => setorDe(id)?.nome || 'setor removido');
+    return nomes.join(' e ');
+  }
   return publico
     .split(',')
     .map((n) => ROTULO_NIVEL[n.trim()] || n.trim())
@@ -379,6 +386,7 @@ function atualizarFaixa() {
 const estado = {
   usuario: null,
   tipos: [],
+  setores: [],
   notificacoes: [],
   proximoCursor: null,
   temMais: false,
@@ -392,6 +400,63 @@ async function carregarTipos() {
   } catch {
     estado.tipos = [];
   }
+}
+
+/** Recarrega os setores. A interface usa para rótulos e para os seletores. */
+async function carregarSetores() {
+  try {
+    const { itens } = await api('/setores');
+    estado.setores = itens;
+  } catch {
+    estado.setores = [];
+  }
+}
+
+const setorDe = (id) => estado.setores.find((s) => s.id === Number(id));
+
+/** <option> de setor, com "sem setor" no topo. */
+function opcoesDeSetor(selecionado, rotuloVazio = 'Sem setor') {
+  const atual = selecionado === null || selecionado === undefined ? '' : String(selecionado);
+  return (
+    `<option value="" ${atual === '' ? 'selected' : ''}>${rotuloVazio}</option>` +
+    estado.setores
+      .map(
+        (s) =>
+          `<option value="${s.id}" ${atual === String(s.id) ? 'selected' : ''}>${esc(s.nome)}</option>`
+      )
+      .join('')
+  );
+}
+
+/**
+ * <option> de público alvo: níveis e, abaixo, um item por setor.
+ * Os setores entram num <optgroup> para não se misturarem aos níveis.
+ */
+function opcoesDePublico(selecionado = 'todos') {
+  const fixos = [
+    ['todos', 'Todo o time'],
+    ['admin,operador', 'Administradores e operadores'],
+    ['admin', 'Somente administradores'],
+    ['operador', 'Somente operadores'],
+    ['membro', 'Somente membros'],
+  ];
+
+  const lista = fixos
+    .map(([v, r]) => `<option value="${v}" ${v === selecionado ? 'selected' : ''}>${r}</option>`)
+    .join('');
+
+  if (!estado.setores.length) return lista;
+
+  const porSetor = estado.setores
+    .map((s) => {
+      const valor = `setor:${s.id}`;
+      return `<option value="${valor}" ${valor === selecionado ? 'selected' : ''}>${esc(
+        s.nome
+      )}</option>`;
+    })
+    .join('');
+
+  return `${lista}<optgroup label="Setores">${porSetor}</optgroup>`;
 }
 
 const podeEnviar = () => ['admin', 'operador'].includes(estado.usuario?.nivel);
@@ -629,13 +694,7 @@ function telaEnviar(container) {
         </label>
         <label class="campo">
           <span>Público alvo</span>
-          <select name="publico">
-            <option value="todos">Todo o time</option>
-            <option value="admin,operador">Administradores e operadores</option>
-            <option value="admin">Somente administradores</option>
-            <option value="operador">Somente operadores</option>
-            <option value="membro">Somente membros</option>
-          </select>
+          <select name="publico">${opcoesDePublico('todos')}</select>
         </label>
       </div>
 
@@ -844,13 +903,7 @@ async function telaWebhooks(container) {
 
         <label class="campo">
           <span>Público alvo</span>
-          <select name="publico">
-            <option value="todos">Todo o time</option>
-            <option value="admin,operador">Administradores e operadores</option>
-            <option value="admin">Somente administradores</option>
-            <option value="operador">Somente operadores</option>
-            <option value="membro">Somente membros</option>
-          </select>
+          <select name="publico">${opcoesDePublico('todos')}</select>
         </label>
 
         <label class="campo">
@@ -1021,12 +1074,14 @@ function cartaoUsuario(u, eu) {
           ${u.id === eu ? '<span class="selo-inativo">Você</span>' : ''}
           <div class="item__meta">
             <span>${esc(u.email)}</span>
+            <span>${u.setor ? esc(u.setor) : 'sem setor'}</span>
             <span>${u.aparelhos} aparelho(s)</span>
             ${u.silenciados ? `<span>${u.silenciados} tipo(s) silenciado(s)</span>` : ''}
             <span>${u.ultimo_acesso_em ? `entrou ${esc(quando(u.ultimo_acesso_em))}` : 'nunca entrou'}</span>
           </div>
         </div>
         <div class="item__acoes">
+          <select data-acao="setor" aria-label="Setor">${opcoesDeSetor(u.setor_id)}</select>
           <select data-acao="nivel" aria-label="Nível de acesso">${opcoes}</select>
           <button class="botao botao--pequeno" data-acao="alternar">${u.ativo ? 'Desativar' : 'Ativar'}</button>
           <button class="botao botao--pequeno" data-acao="senha">Nova senha</button>
@@ -1038,6 +1093,31 @@ function cartaoUsuario(u, eu) {
 
 async function telaAcessos(container) {
   container.innerHTML = `
+    <div class="bloco">
+      <h2>Setores</h2>
+      <form class="formulario" id="form-setor">
+        <div class="linha">
+          <label class="campo">
+            <span>Nome do setor</span>
+            <input name="nome" required maxlength="40" placeholder="Ex.: Comercial" />
+          </label>
+          <label class="campo">
+            <span>Descrição</span>
+            <input name="descricao" maxlength="140" placeholder="opcional" />
+          </label>
+        </div>
+        <p class="dica">
+          O setor serve para mandar aviso só para um time — no público alvo de
+          um envio, de um webhook, ou marcando uma categoria como sendo dele.
+          Quem fica <b>sem setor</b> continua recebendo tudo que não for
+          específico de um time.
+        </p>
+        <p class="erro" id="erro-setor" hidden></p>
+        <button type="submit" class="botao">Criar setor</button>
+      </form>
+      <ul class="lista" id="lista-setores" style="margin-top:18px"></ul>
+    </div>
+
     <div class="bloco">
       <h2>Nova conta</h2>
       <form class="formulario" id="form-usuario">
@@ -1065,6 +1145,10 @@ async function telaAcessos(container) {
             <input name="senha" type="text" minlength="8" required placeholder="mínimo 8 caracteres" />
           </label>
         </div>
+        <label class="campo">
+          <span>Setor</span>
+          <select name="setor_id">${opcoesDeSetor('')}</select>
+        </label>
         <p class="erro" id="erro-usuario" hidden></p>
         <button type="submit" class="botao botao--principal">Criar conta</button>
       </form>
@@ -1075,7 +1159,29 @@ async function telaAcessos(container) {
       <ul class="lista" id="lista-usuarios"></ul>
     </div>`;
 
+  await desenharSetores();
   await carregarUsuarios();
+
+  $('#form-setor').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const form = evento.target;
+    const erro = $('#erro-setor');
+    erro.hidden = true;
+    try {
+      await api('/setores', {
+        metodo: 'POST',
+        corpo: { nome: form.nome.value, descricao: form.descricao.value },
+      });
+      form.reset();
+      await desenharSetores();
+      // Os seletores de setor da tela inteira precisam da lista nova.
+      await telaAcessos(container);
+      avisar('Setor criado.', 'ok');
+    } catch (e) {
+      erro.textContent = e.message;
+      erro.hidden = false;
+    }
+  });
 
   $('#form-usuario').addEventListener('submit', async (evento) => {
     evento.preventDefault();
@@ -1090,6 +1196,7 @@ async function telaAcessos(container) {
           email: form.email.value,
           senha: form.senha.value,
           nivel: form.nivel.value,
+          setor_id: form.setor_id.value,
         },
       });
       avisar('Conta criada.', 'ok');
@@ -1100,6 +1207,94 @@ async function telaAcessos(container) {
       erro.hidden = false;
     }
   });
+}
+
+/** Lista os setores com edição no lugar, no mesmo estilo das categorias. */
+async function desenharSetores() {
+  await carregarSetores();
+  const lista = $('#lista-setores');
+  if (!lista) return;
+
+  lista.innerHTML = estado.setores.length
+    ? estado.setores
+        .map(
+          (setor) => `
+        <li class="item" data-id="${setor.id}">
+          <form class="categoria">
+            <span class="etiqueta etiqueta--neutro">${esc(setor.nome)}</span>
+            <input name="nome" value="${esc(setor.nome)}" maxlength="40" aria-label="Nome" />
+            <input
+              name="descricao"
+              value="${esc(setor.descricao)}"
+              maxlength="140"
+              placeholder="Descrição"
+              aria-label="Descrição"
+            />
+            <div class="categoria__acoes">
+              <button type="submit" class="botao botao--pequeno">Salvar</button>
+              <button type="button" class="botao botao--pequeno botao--perigo" data-excluir>Excluir</button>
+            </div>
+          </form>
+          <div class="item__meta">
+            <span>${setor.pessoas} pessoa(s)</span>
+            ${setor.categorias ? `<span>${setor.categorias} categoria(s)</span>` : ''}
+          </div>
+        </li>`
+        )
+        .join('')
+    : '<div class="vazio">Nenhum setor criado ainda.</div>';
+
+  lista.onsubmit = async (evento) => {
+    evento.preventDefault();
+    const form = evento.target.closest('form');
+    const id = form.closest('.item').dataset.id;
+    try {
+      await api(`/setores/${id}`, {
+        metodo: 'PATCH',
+        corpo: { nome: form.nome.value, descricao: form.descricao.value },
+      });
+      await desenharSetores();
+      avisar('Setor atualizado.', 'ok');
+    } catch (e) {
+      avisar(e.message, 'erro');
+    }
+  };
+
+  lista.onclick = async (evento) => {
+    const botao = evento.target.closest('[data-excluir]');
+    if (!botao) return;
+    const id = botao.closest('.item').dataset.id;
+    const setor = setorDe(id);
+
+    if (
+      !confirm(
+        `Excluir o setor "${setor.nome}"?\n\nNinguém é apagado: as ${setor.pessoas} pessoa(s) ` +
+          `ficam sem setor e voltam a receber tudo que não for de um time específico.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await api(`/setores/${id}`, { metodo: 'DELETE' });
+      avisar('Setor excluído.', 'ok');
+      await desenharSetores();
+      await carregarUsuarios();
+      return;
+    } catch (e) {
+      // 409 = há webhooks mirando só este setor. O servidor diz quais.
+      if (e.status !== 409) return avisar(e.message, 'erro');
+      if (!confirm(`${e.message}\n\nExcluir assim mesmo?`)) return;
+      try {
+        await api(`/setores/${id}?confirmar=sim`, { metodo: 'DELETE' });
+        avisar('Setor excluído. Revise o público desses webhooks.', 'ok');
+        await desenharSetores();
+        await carregarUsuarios();
+      } catch (erro2) {
+        avisar(erro2.message, 'erro');
+      }
+    }
+  };
 }
 
 async function carregarUsuarios() {
@@ -1116,6 +1311,15 @@ async function carregarUsuarios() {
       if (acao === 'nivel') {
         await api(`/usuarios/${id}`, { metodo: 'PATCH', corpo: { nivel: elemento.value } });
         avisar('Nível atualizado.', 'ok');
+      }
+      if (acao === 'setor') {
+        await api(`/usuarios/${id}`, { metodo: 'PATCH', corpo: { setor_id: elemento.value } });
+        avisar(
+          elemento.value
+            ? `${usuario.nome} agora é do setor ${setorDe(elemento.value)?.nome}.`
+            : `${usuario.nome} ficou sem setor.`,
+          'ok'
+        );
       }
       if (acao === 'alternar') {
         await api(`/usuarios/${id}`, { metodo: 'PATCH', corpo: { ativo: !usuario.ativo } });
@@ -1156,9 +1360,19 @@ async function carregarPreferencias() {
   try {
     const { tipos } = await api('/push/preferencias');
 
-    lista.innerHTML = tipos
-      .map(
-        ({ tipo, rotulo, descricao, cor, ativo }) => `
+    /*
+     * Agrupa por setor. As de uso geral vêm primeiro, sem cabeçalho; as do
+     * setor da pessoa vêm depois, com o nome do time em cima — assim fica
+     * claro por que só ela enxerga aquelas.
+     */
+    const grupos = [];
+    for (const t of tipos) {
+      const chave = t.setor || '';
+      if (!grupos.length || grupos.at(-1).setor !== chave) grupos.push({ setor: chave, itens: [] });
+      grupos.at(-1).itens.push(t);
+    }
+
+    const linha = ({ tipo, rotulo, descricao, cor, ativo }) => `
         <li class="item preferencia">
           <div>
             <span class="etiqueta etiqueta--${esc(cor)}">${esc(rotulo || tipo)}</span>
@@ -1168,7 +1382,13 @@ async function carregarPreferencias() {
             <input type="checkbox" data-tipo="${esc(tipo)}" ${ativo ? 'checked' : ''} />
             <span class="chave__trilho"><span class="chave__bola"></span></span>
           </label>
-        </li>`
+        </li>`;
+
+    lista.innerHTML = grupos
+      .map(
+        (g) =>
+          (g.setor ? `<li class="preferencia__setor">${esc(g.setor)}</li>` : '') +
+          g.itens.map(linha).join('')
       )
       .join('');
 
@@ -1347,6 +1567,7 @@ function itemCategoria(t) {
 
         <input name="rotulo" value="${esc(t.rotulo)}" maxlength="40" aria-label="Nome" />
         <select name="cor" aria-label="Cor">${opcoesDeCor(t.cor)}</select>
+        <select name="setor_id" aria-label="Setor">${opcoesDeSetor(t.setor_id, 'Todos os setores')}</select>
         <input
           name="descricao"
           value="${esc(t.descricao)}"
@@ -1366,6 +1587,7 @@ function itemCategoria(t) {
       </form>
       <div class="item__meta">
         <span><code>${esc(t.chave)}</code></span>
+        ${t.setor ? `<span>só o setor ${esc(t.setor)}</span>` : ''}
         ${t.fixo ? '<span>de fábrica</span>' : ''}
         ${t.silenciavel ? '' : '<span>não pode ser silenciada</span>'}
       </div>
@@ -1388,6 +1610,10 @@ async function telaCategorias(container) {
           </label>
         </div>
         <label class="campo">
+          <span>Setor</span>
+          <select name="setor_id">${opcoesDeSetor('', 'Todos os setores')}</select>
+        </label>
+        <label class="campo">
           <span>Descrição</span>
           <input
             name="descricao"
@@ -1399,6 +1625,11 @@ async function telaCategorias(container) {
           A categoria nasce ligada para todo mundo. Cada pessoa decide se quer
           receber, em <b>Aparelho</b>. Para disparar pelo n8n, mande a chave em
           <code>tipo</code>.
+        </p>
+        <p class="dica">
+          Escolhendo um setor, a categoria passa a ser entregue <b>só a quem é
+          daquele time</b> — e só aparece na tela de preferências dessas
+          pessoas. Deixe em "Todos os setores" para o comportamento normal.
         </p>
         <p class="erro" id="erro-categoria" hidden></p>
         <button type="submit" class="botao botao--principal">Criar categoria</button>
@@ -1424,6 +1655,7 @@ async function telaCategorias(container) {
           rotulo: form.rotulo.value,
           cor: form.cor.value,
           descricao: form.descricao.value,
+          setor_id: form.setor_id.value,
         },
       });
       form.reset();
@@ -1453,6 +1685,7 @@ async function desenharCategorias() {
           rotulo: form.rotulo.value,
           cor: form.cor.value,
           descricao: form.descricao.value,
+          setor_id: form.setor_id.value,
         },
       });
       await desenharCategorias();
@@ -1625,8 +1858,9 @@ async function entrarNoApp(usuario) {
   $('#usuario-atual').querySelector('.usuario__nivel').textContent =
     ROTULO_NIVEL[usuario.nivel] || usuario.nivel;
 
-  // Antes de desenhar qualquer tela: rótulos, cores e filtros dependem disto.
-  await carregarTipos();
+  // Antes de desenhar qualquer tela: rótulos, cores, setores e filtros
+  // dependem disto.
+  await Promise.all([carregarTipos(), carregarSetores()]);
 
   montarMenu();
   atualizarFaixa();

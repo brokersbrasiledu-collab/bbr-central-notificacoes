@@ -15,6 +15,7 @@ modelo nenhum: **manda o título e o texto prontos**, e ela só entrega.
 | `titulo` | na tela do celular, na notificação |
 | `texto` | completo no histórico do app |
 | `tipo` | vira a etiqueta colorida (opcional) |
+| `setor` | manda só para um time (opcional) |
 
 Isso resolve o caso do aviso comprido: o celular mostra o título e o começo da
 mensagem; quem quiser o detalhe abre o app e lê tudo.
@@ -90,6 +91,40 @@ O campo `tipo` define a etiqueta e a cor na linha do tempo. Já vêm prontas:
 Se você não mandar `tipo`, vale o que foi escolhido na criação do webhook.
 Mandando no JSON, o **mesmo webhook** serve para vários assuntos — dá para ter
 um só gatilho para a Virtu e diferenciar venda aprovada de pagamento recusado.
+
+### Categoria de um setor
+
+Marcando uma categoria como sendo de um setor (em **Acessos → Setores** você
+cria os times), ela passa a ser entregue **só a quem é daquele time**, e só
+aparece na tela de preferências dessas pessoas.
+
+Categoria sem setor — o caso de todas as que já estavam no ar — continua indo
+para todo mundo.
+
+---
+
+## Mandando para um setor específico
+
+Além da categoria, o próprio evento pode mirar um time:
+
+```json
+{
+  "titulo": "⚠️ Boleto vencido",
+  "texto": "Cliente Maria está com 2 boletos em aberto.",
+  "tipo": "alerta",
+  "setor": "Financeiro"
+}
+```
+
+O `setor` aceita o nome (sem diferenciar maiúsculas) ou o id. Quando vem, ele
+manda: a notificação vai só para aquele time, ignorando o público cadastrado no
+webhook.
+
+**Valor ausente ou desconhecido é ignorado** e vale o público do webhook. Isso é
+proposital — nenhuma chamada que já funciona pode passar a falhar, nem a mudar
+de destinatário, por causa deste campo.
+
+---
 
 ### Criando as suas
 

@@ -6,6 +6,20 @@
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
+-- ── setores ─────────────────────────────────────────────────────
+-- Os times internos. Servem para dois fins: dizer de quem é cada pessoa
+-- e permitir mandar um aviso só para um time.
+--
+-- Tudo que aponta para cá é opcional (NULL = "sem setor"), de propósito:
+-- é o que garante que contas, categorias e webhooks que já existiam
+-- continuem se comportando exatamente como antes.
+CREATE TABLE IF NOT EXISTS setores (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  nome      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+  descricao TEXT    NOT NULL DEFAULT '',
+  criado_em TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ── usuarios ────────────────────────────────────────────────────
 -- Contas do time. A senha nunca é guardada em texto puro: só o hash.
 CREATE TABLE IF NOT EXISTS usuarios (
@@ -17,7 +31,9 @@ CREATE TABLE IF NOT EXISTS usuarios (
                 CHECK (nivel IN ('admin', 'operador', 'membro')),
   ativo       INTEGER NOT NULL DEFAULT 1,
   criado_em   TEXT    NOT NULL DEFAULT (datetime('now')),
-  ultimo_acesso_em TEXT
+  ultimo_acesso_em TEXT,
+  -- NULL = sem setor. Continua recebendo tudo que não for de setor.
+  setor_id    INTEGER REFERENCES setores(id) ON DELETE SET NULL
 );
 
 -- ── aparelhos ───────────────────────────────────────────────────
@@ -73,7 +89,10 @@ CREATE TABLE IF NOT EXISTS tipos (
   -- quebrado para quem tivesse desligado.
   silenciavel INTEGER NOT NULL DEFAULT 1,
   ordem       INTEGER NOT NULL DEFAULT 100,
-  criado_em   TEXT    NOT NULL DEFAULT (datetime('now'))
+  criado_em   TEXT    NOT NULL DEFAULT (datetime('now')),
+  -- Categoria de um setor só é entregue a quem é daquele setor, e só
+  -- aparece na tela de preferências dessas pessoas. NULL = de todos.
+  setor_id    INTEGER REFERENCES setores(id) ON DELETE SET NULL
 );
 
 -- Categorias de fábrica. INSERT OR IGNORE: quem já tem o banco criado

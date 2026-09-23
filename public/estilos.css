@@ -729,9 +729,18 @@ h2 {
    com a descrição ocupando a linha de baixo. */
 .categoria {
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  grid-template-columns: auto 1fr auto auto auto;
   align-items: center;
   gap: 10px;
+}
+
+/* Cabeçalho do grupo de um setor, na tela de preferências. */
+.preferencia__setor {
+  margin: 14px 0 2px;
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--texto-fraco);
 }
 
 .categoria .etiqueta {
@@ -745,7 +754,8 @@ h2 {
   font-size: 13px;
 }
 
-.categoria select[name='cor'] {
+.categoria select[name='cor'],
+.categoria select[name='setor_id'] {
   width: auto;
   min-width: 116px;
   padding-right: 32px;
@@ -764,7 +774,7 @@ h2 {
 
 .categoria__acoes {
   grid-row: 1;
-  grid-column: 4;
+  grid-column: 5;
   display: flex;
   gap: 6px;
 }
@@ -776,6 +786,7 @@ h2 {
 
   /* Uma coluna só: volta a valer a ordem do HTML. */
   .categoria input[name='descricao'],
+  .categoria select[name='setor_id'],
   .categoria__acoes {
     grid-row: auto;
     grid-column: auto;

@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import { db } from '../db/index.js';
 import { NIVEIS } from '../config.js';
 import { exigirNivel } from '../middlewares/auth.js';
+import { setorIdValido } from '../servicos/setores.js';
 
 export const rotasUsuarios = Router();
 
@@ -17,11 +18,13 @@ rotasUsuarios.get('/', (_req, res) => {
   const itens = db
     .prepare(
       `SELECT u.id, u.nome, u.email, u.nivel, u.ativo, u.criado_em, u.ultimo_acesso_em,
+              u.setor_id, s.nome AS setor,
               (SELECT COUNT(*) FROM aparelhos a WHERE a.usuario_id = u.id) AS aparelhos,
               -- Ajuda o admin a entender por que alguém não recebeu um aviso.
               (SELECT COUNT(*) FROM preferencias_tipo p WHERE p.usuario_id = u.id) AS silenciados
          FROM usuarios u
-        ORDER BY u.nivel = 'admin' DESC, u.nome COLLATE NOCASE`
+         LEFT JOIN setores s ON s.id = u.setor_id
+        ORDER BY s.nome COLLATE NOCASE, u.nivel = 'admin' DESC, u.nome COLLATE NOCASE`
     )
     .all();
   res.json({ itens });
@@ -41,9 +44,15 @@ rotasUsuarios.post('/', (req, res) => {
   const duplicado = db.prepare('SELECT id FROM usuarios WHERE email = ?').get(email);
   if (duplicado) return res.status(409).json({ erro: 'Já existe uma conta com este e-mail.' });
 
+  // Setor é opcional: em branco significa "sem setor", que recebe tudo
+  // que não for específico de um time.
+  const setorId = setorIdValido(req.body?.setor_id);
+
   const info = db
-    .prepare('INSERT INTO usuarios (nome, email, senha_hash, nivel) VALUES (?, ?, ?, ?)')
-    .run(nome, email, bcrypt.hashSync(senha, 12), nivel);
+    .prepare(
+      'INSERT INTO usuarios (nome, email, senha_hash, nivel, setor_id) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run(nome, email, bcrypt.hashSync(senha, 12), nivel, setorId);
 
   const usuario = db
     .prepare('SELECT id, nome, email, nivel, ativo, criado_em FROM usuarios WHERE id = ?')
@@ -74,10 +83,16 @@ rotasUsuarios.patch('/:id', (req, res) => {
     }
   }
 
-  db.prepare('UPDATE usuarios SET nome = ?, nivel = ?, ativo = ? WHERE id = ?').run(
+  // Só mexe no setor se o campo veio na requisição: assim um PATCH que
+  // troca apenas o nível não zera o time da pessoa sem querer.
+  const setorId =
+    req.body?.setor_id !== undefined ? setorIdValido(req.body.setor_id) : atual.setor_id;
+
+  db.prepare('UPDATE usuarios SET nome = ?, nivel = ?, ativo = ?, setor_id = ? WHERE id = ?').run(
     nome,
     nivel,
     ativo,
+    setorId,
     id
   );
 

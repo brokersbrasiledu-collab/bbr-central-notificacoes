@@ -43,7 +43,12 @@ export function carregarUsuario(req, _res, proximo) {
   try {
     const dados = jwt.verify(token, config.jwtSegredo);
     const usuario = db
-      .prepare('SELECT id, nome, email, nivel, ativo FROM usuarios WHERE id = ?')
+      .prepare(
+        `SELECT u.id, u.nome, u.email, u.nivel, u.ativo, u.setor_id, s.nome AS setor
+           FROM usuarios u
+           LEFT JOIN setores s ON s.id = u.setor_id
+          WHERE u.id = ?`
+      )
       .get(dados.sub);
     // Conta desativada ou apagada depois do login perde a sessão na hora.
     if (usuario && usuario.ativo) req.usuario = usuario;

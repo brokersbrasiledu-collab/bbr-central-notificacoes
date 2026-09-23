@@ -14,6 +14,7 @@ import { tipoExiste } from '../servicos/tipos.js';
 import { exigirNivel } from '../middlewares/auth.js';
 import { publicarNotificacao } from '../servicos/push.js';
 import { aplicarModelo, variaveisDisponiveis, primeiroCampo } from '../servicos/modelo.js';
+import { resolverSetor } from '../servicos/setores.js';
 
 export const rotasWebhooks = Router();
 export const rotasGatilho = Router();
@@ -249,12 +250,23 @@ async function dispararGatilho(req, res) {
   // avisos de naturezas diferentes, sem precisar criar vários webhooks.
   const tipo = tipoExiste(dados.tipo) ? dados.tipo : webhook.tipo;
 
+  /*
+   * O evento também pode mirar um setor, por id ou por nome:
+   *   { "setor": "Comercial" }
+   *
+   * Valor ausente ou desconhecido é ignorado, e vale o público cadastrado
+   * no webhook. Isso é proposital: nenhuma chamada que já funciona pode
+   * passar a falhar — nem a mudar de destinatário — por causa deste campo.
+   */
+  const setorDoEvento = resolverSetor(dados.setor ?? dados.setor_id);
+  const publico = setorDoEvento ? `setor:${setorDoEvento.id}` : webhook.publico;
+
   const resultado = await publicarNotificacao({
     titulo: titulo.slice(0, LIMITE_TITULO),
     texto: texto.slice(0, LIMITE_TEXTO),
     tipo,
     origem: 'webhook',
-    publico: webhook.publico,
+    publico,
     webhookId: webhook.id,
     payload: dados,
   });

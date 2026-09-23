@@ -93,20 +93,31 @@ rotasPush.get('/preferencias', exigirLogin, (req, res) => {
     .all(req.usuario.id)
     .map((linha) => linha.tipo);
 
+  /*
+   * Só aparecem as categorias que esta pessoa pode receber de fato:
+   * as de uso geral (sem setor) e as do setor dela. Mostrar um botão
+   * para algo que nunca chegaria seria só confusão.
+   */
   const escolhiveis = db
     .prepare(
-      `SELECT chave, rotulo, descricao, cor
-         FROM tipos WHERE silenciavel = 1
-        ORDER BY ordem, rotulo COLLATE NOCASE`
+      `SELECT t.chave, t.rotulo, t.descricao, t.cor, t.setor_id, s.nome AS setor
+         FROM tipos t
+         LEFT JOIN setores s ON s.id = t.setor_id
+        WHERE t.silenciavel = 1
+          AND (t.setor_id IS NULL OR t.setor_id = @setor)
+        ORDER BY (t.setor_id IS NOT NULL), s.nome COLLATE NOCASE,
+                 t.ordem, t.rotulo COLLATE NOCASE`
     )
-    .all();
+    .all({ setor: req.usuario.setor_id ?? null });
 
   res.json({
+    setor: req.usuario.setor ?? null,
     tipos: escolhiveis.map((t) => ({
       tipo: t.chave,
       rotulo: t.rotulo,
       descricao: t.descricao,
       cor: t.cor,
+      setor: t.setor,
       ativo: !silenciados.includes(t.chave),
     })),
   });
