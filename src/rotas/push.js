@@ -99,18 +99,16 @@ rotasPush.get('/preferencias', exigirLogin, (req, res) => {
    * para algo que nunca chegaria seria só confusão.
    */
   /*
-   * Uma pessoa pode estar em vários setores: valem as categorias de uso
-   * geral mais as de qualquer time a que ela pertença.
-   *
-   * Quem não está em time nenhum vê TODAS — mesma regra da entrega, para
-   * a tela não prometer algo diferente do que o celular recebe.
+   * Mesma divisão da entrega, para a tela não prometer nada diferente do
+   * que o celular recebe: sem setor → só as categorias gerais; com um ou
+   * mais setores → só as desses setores.
    */
   const meusSetores = (req.usuario.setores || []).map((s) => s.id);
   const marcadores = meusSetores.map((_, i) => `@s${i}`).join(',');
   const params = Object.fromEntries(meusSetores.map((v, i) => [`s${i}`, v]));
   const filtroSetor = marcadores
-    ? ` AND (t.setor_id IS NULL OR t.setor_id IN (${marcadores}))`
-    : '';
+    ? ` AND t.setor_id IN (${marcadores})`
+    : ' AND t.setor_id IS NULL';
 
   const escolhiveis = db
     .prepare(

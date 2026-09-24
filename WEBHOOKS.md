@@ -94,17 +94,20 @@ um só gatilho para a Virtu e diferenciar venda aprovada de pagamento recusado.
 
 ### Categoria de um setor
 
-Marcando uma categoria como sendo de um setor (em **Acessos → Setores** você
-cria os times), ela passa a ser entregue a quem é daquele time — e também a
-quem **não está em time nenhum**, que enxerga a empresa inteira. Quem é de
-outro setor deixa de receber, e a categoria nem aparece na tela de preferências
-dessa pessoa.
+Os setores dividem o time em dois casos, sem sobreposição:
 
-Uma pessoa pode estar em **mais de um setor**: recebe as categorias de todos os
-times a que pertence.
+| Pessoa | Recebe |
+| --- | --- |
+| **Sem setor** | as categorias **gerais** (as que não pertencem a time nenhum) |
+| **Em um ou mais setores** | **somente** as categorias desses setores |
 
-Categoria sem setor — o caso de todas as que já estavam no ar — continua indo
-para todo mundo.
+Ou seja, entrar num setor deixa de receber as gerais. Vale conferir, antes de
+marcar alguém, se o setor dela já tem as categorias que ela precisa acompanhar.
+
+As cinco categorias de fábrica (`lead`, `meta`, `alerta`, `aviso`, `sistema`)
+nascem **gerais**. Se o seu time já está dividido em setores e você quer que
+uma delas continue chegando, marque essa categoria com o setor — ou crie uma
+equivalente dentro dele.
 
 ---
 

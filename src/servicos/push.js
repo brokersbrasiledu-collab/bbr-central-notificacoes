@@ -50,21 +50,30 @@ export function aparelhosDoPublico(publico = 'todos', tipo = null) {
     ? (db.prepare('SELECT setor_id FROM tipos WHERE chave = ?').get(tipo)?.setor_id ?? null)
     : null;
   /*
-   * Quem não pertence a time nenhum recebe as categorias de TODOS os
-   * setores — é a visão de quem acompanha a empresa inteira. Só quem
-   * está em algum time é que passa a receber apenas o dele.
+   * Setor divide o time em dois casos, sem sobreposição:
    *
-   * Isto vale para a categoria. O público alvo continua literal: um envio
+   *   • quem NÃO está em setor nenhum recebe as categorias gerais
+   *     (as que não pertencem a time algum);
+   *   • quem está em um ou mais setores recebe SOMENTE as categorias
+   *     desses setores.
+   *
+   * Ou seja: entrar num setor deixa de receber as gerais. É a regra
+   * pedida, e vale a pena ter em mente ao marcar alguém.
+   *
+   * Isto é sobre a categoria. O público alvo continua literal: um envio
    * marcado como "setor:3" vai só para o setor 3, porque ali a escolha do
    * destinatário foi explícita.
    */
-  const restricaoSetor = setorDoTipo
-    ? ` AND (
-          NOT EXISTS (SELECT 1 FROM usuario_setores sem WHERE sem.usuario_id = u.id)
-          OR EXISTS (
+  const semSetorNenhum =
+    ' AND NOT EXISTS (SELECT 1 FROM usuario_setores sem WHERE sem.usuario_id = u.id)';
+
+  const restricaoSetor = !tipo
+    ? ''
+    : setorDoTipo
+      ? ` AND EXISTS (
             SELECT 1 FROM usuario_setores us
-             WHERE us.usuario_id = u.id AND us.setor_id = @setorDoTipo))`
-    : '';
+             WHERE us.usuario_id = u.id AND us.setor_id = @setorDoTipo)`
+      : semSetorNenhum;
 
   // Quem silenciou este tipo sai do envio. A notificação continua no
   // histórico: o filtro é só do push, não do que o time consegue ver.

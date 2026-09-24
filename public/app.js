@@ -1140,8 +1140,15 @@ async function telaAcessos(container) {
         <p class="dica">
           O setor serve para mandar aviso só para um time — no público alvo de
           um envio, de um webhook, ou marcando uma categoria como sendo dele.
-          Uma pessoa pode estar em mais de um setor. Quem fica <b>sem setor
-          nenhum</b> recebe as categorias de <b>todos</b> os times.
+          Uma pessoa pode estar em mais de um setor.
+        </p>
+        <p class="dica dica--atencao">
+          <b>Como as categorias são divididas:</b> quem está <b>sem setor</b>
+          recebe as categorias gerais (as que não são de time nenhum). Quem
+          entra em um ou mais setores passa a receber <b>somente as desses
+          setores</b> — e deixa de receber as gerais. Antes de marcar alguém,
+          confira em <b>Tipos</b> se o setor dela já tem as categorias que ela
+          precisa acompanhar.
         </p>
         <p class="erro" id="erro-setor" hidden></p>
         <button type="submit" class="botao">Criar setor</button>
@@ -1190,7 +1197,7 @@ async function telaAcessos(container) {
                      )
                      .join('')}
                  </div>
-                 <p class="dica">Pode marcar mais de um. Sem marcar nenhum, a pessoa recebe as categorias de todos os times.</p>
+                 <p class="dica">Pode marcar mais de um. Marcando algum, a pessoa passa a receber somente as categorias desses setores. Sem marcar nenhum, ela recebe as categorias gerais.</p>
                </div>`
             : ''
         }
@@ -1674,10 +1681,9 @@ async function telaCategorias(container) {
           <code>tipo</code>.
         </p>
         <p class="dica">
-          Escolhendo um setor, a categoria passa a ser entregue <b>a quem é
-          daquele time</b> — e a quem não está em time nenhum, que enxerga a
-          empresa inteira. Quem é de outro setor deixa de receber, e ela nem
-          aparece na tela de preferências dessa pessoa.
+          Sem setor, a categoria é <b>geral</b>: vai para quem não está em
+          time nenhum. Escolhendo um setor, ela passa a ir <b>só para quem é
+          daquele time</b> — e some da tela de preferências de todo o resto.
         </p>
         <p class="erro" id="erro-categoria" hidden></p>
         <button type="submit" class="botao botao--principal">Criar categoria</button>
