@@ -18,8 +18,7 @@ export function listarSetores() {
       `SELECT s.id, s.nome, s.descricao, s.criado_em,
               (SELECT COUNT(*) FROM usuario_setores us
                  JOIN usuarios u ON u.id = us.usuario_id
-                WHERE us.setor_id = s.id AND u.ativo = 1) AS pessoas,
-              (SELECT COUNT(*) FROM tipos t WHERE t.setor_id = s.id) AS categorias
+                WHERE us.setor_id = s.id AND u.ativo = 1) AS pessoas
          FROM setores s
         ORDER BY s.nome COLLATE NOCASE`
     )

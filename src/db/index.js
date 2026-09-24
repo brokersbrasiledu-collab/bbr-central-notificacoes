@@ -43,18 +43,25 @@ function ajustarColunas() {
     console.log('[migração] tabela setores criada');
   }
 
-  // A categoria continua pertencendo a um setor só — é o natural, e não
-  // foi pedido outra coisa.
-  if (tabelaExiste('tipos')) {
-    const temSetor = db
+  /*
+   * A categoria já foi usada para segmentar quem recebia o quê. Não é
+   * mais: ela é só a etiqueta do aviso, e a segmentação acontece por
+   * setor, no público alvo. A coluna sai para não sobrar um campo que
+   * ninguém lê e que confundiria quem olhar o banco depois.
+   */
+  if (
+    tabelaExiste('tipos') &&
+    db
       .prepare('PRAGMA table_info(tipos)')
       .all()
-      .some((c) => c.name === 'setor_id');
-    if (!temSetor) {
-      db.exec(
-        'ALTER TABLE tipos ADD COLUMN setor_id INTEGER REFERENCES setores(id) ON DELETE SET NULL'
-      );
-      console.log("[migração] coluna 'setor_id' adicionada em tipos");
+      .some((c) => c.name === 'setor_id')
+  ) {
+    db.pragma('foreign_keys = OFF');
+    try {
+      db.exec('ALTER TABLE tipos DROP COLUMN setor_id');
+      console.log("[migração] coluna 'setor_id' removida de tipos (categoria virou só etiqueta)");
+    } finally {
+      db.pragma('foreign_keys = ON');
     }
   }
 

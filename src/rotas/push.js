@@ -99,27 +99,20 @@ rotasPush.get('/preferencias', exigirLogin, (req, res) => {
    * para algo que nunca chegaria seria só confusão.
    */
   /*
-   * Mesma divisão da entrega, para a tela não prometer nada diferente do
-   * que o celular recebe: sem setor → só as categorias gerais; com um ou
-   * mais setores → só as desses setores.
+   * Todo mundo vê todas as categorias silenciáveis.
+   *
+   * Categoria é etiqueta, não segmentação: quem recebe o quê se decide
+   * pelo setor, no público alvo do envio ou do webhook. Aqui a pessoa só
+   * escolhe o que não quer que toque no celular dela.
    */
-  const meusSetores = (req.usuario.setores || []).map((s) => s.id);
-  const marcadores = meusSetores.map((_, i) => `@s${i}`).join(',');
-  const params = Object.fromEntries(meusSetores.map((v, i) => [`s${i}`, v]));
-  const filtroSetor = marcadores
-    ? ` AND t.setor_id IN (${marcadores})`
-    : ' AND t.setor_id IS NULL';
-
   const escolhiveis = db
     .prepare(
-      `SELECT t.chave, t.rotulo, t.descricao, t.cor, t.setor_id, s.nome AS setor
-         FROM tipos t
-         LEFT JOIN setores s ON s.id = t.setor_id
-        WHERE t.silenciavel = 1${filtroSetor}
-        ORDER BY (t.setor_id IS NOT NULL), s.nome COLLATE NOCASE,
-                 t.ordem, t.rotulo COLLATE NOCASE`
+      `SELECT chave, rotulo, descricao, cor
+         FROM tipos
+        WHERE silenciavel = 1
+        ORDER BY ordem, rotulo COLLATE NOCASE`
     )
-    .all(params);
+    .all();
 
   res.json({
     setores: req.usuario.setores || [],
@@ -128,7 +121,6 @@ rotasPush.get('/preferencias', exigirLogin, (req, res) => {
       rotulo: t.rotulo,
       descricao: t.descricao,
       cor: t.cor,
-      setor: t.setor,
       ativo: !silenciados.includes(t.chave),
     })),
   });

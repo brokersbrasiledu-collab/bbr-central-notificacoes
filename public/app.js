@@ -833,12 +833,13 @@ function cartaoWebhook(w) {
           <div class="item__meta">
             <span>${w.modo === 'direto' ? 'JSON pronto' : 'Modelo com variáveis'}</span>
             <span>${esc(rotuloTipo(w.tipo))}</span>
-            <span>${esc(rotuloPublico(w.publico))}</span>
+            <span><b>${esc(rotuloPublico(w.publico))}</b></span>
             <span>${w.total_disparos} disparo(s)</span>
             <span>${w.ultimo_disparo_em ? `último ${esc(quando(w.ultimo_disparo_em))}` : 'nunca disparado'}</span>
           </div>
         </div>
         <div class="item__acoes">
+          <button class="botao botao--pequeno" data-acao="editar">Editar</button>
           <button class="botao botao--pequeno" data-acao="usar">Como usar</button>
           <button class="botao botao--pequeno" data-acao="alternar">${w.ativo ? 'Desativar' : 'Ativar'}</button>
           <button class="botao botao--pequeno" data-acao="rotacionar">Nova chave</button>
@@ -856,6 +857,31 @@ function cartaoWebhook(w) {
         <code>${esc(w.chave_secreta)}</code>
         <button class="botao botao--pequeno" data-acao="copiar-chave">Copiar</button>
       </div>
+
+      <form class="edicao" data-editar hidden>
+        <label class="campo">
+          <span>Nome</span>
+          <input name="nome" value="${esc(w.nome)}" maxlength="60" required />
+        </label>
+        <div class="linha">
+          <label class="campo">
+            <span>Categoria (etiqueta)</span>
+            <select name="tipo">${opcoesDeTipo(w.tipo)}</select>
+          </label>
+          <label class="campo">
+            <span>Público alvo</span>
+            <select name="publico">${opcoesDePublico(w.publico)}</select>
+          </label>
+        </div>
+        <p class="dica">
+          O público alvo é quem recebe. A categoria é só a etiqueta que aparece
+          no histórico.
+        </p>
+        <div class="cabecalho__acoes">
+          <button type="submit" class="botao botao--principal botao--pequeno">Salvar</button>
+          <button type="button" class="botao botao--pequeno" data-acao="cancelar-edicao">Cancelar</button>
+        </div>
+      </form>
 
       <div class="instrucoes" data-usar hidden>
         ${comoUsar}
@@ -1013,6 +1039,27 @@ async function carregarWebhooks() {
     ? itens.map(cartaoWebhook).join('')
     : `<div class="vazio">Nenhum gatilho criado ainda.</div>`;
 
+  // Salvar a edição de um webhook.
+  lista.onsubmit = async (evento) => {
+    evento.preventDefault();
+    const form = evento.target.closest('form');
+    const id = Number(form.closest('.item').dataset.id);
+    try {
+      await api(`/webhooks/${id}`, {
+        metodo: 'PATCH',
+        corpo: {
+          nome: form.nome.value,
+          tipo: form.tipo.value,
+          publico: form.publico.value,
+        },
+      });
+      await carregarWebhooks();
+      avisar('Webhook atualizado. O endereço e a chave continuam os mesmos.', 'ok');
+    } catch (e) {
+      avisar(e.message, 'erro');
+    }
+  };
+
   // Delegação: um só ouvinte cobre todos os botões da lista.
   lista.onclick = async (evento) => {
     const botao = evento.target.closest('[data-acao]');
@@ -1035,6 +1082,16 @@ async function carregarWebhooks() {
         bloco.hidden = !bloco.hidden;
         botao.textContent = bloco.hidden ? 'Como usar' : 'Fechar';
         return;
+      }
+      if (acao === 'editar') {
+        const bloco = item.querySelector('[data-editar]');
+        bloco.hidden = !bloco.hidden;
+        botao.textContent = bloco.hidden ? 'Editar' : 'Fechar';
+        return;
+      }
+      if (acao === 'cancelar-edicao') {
+        // Redesenha para descartar o que foi digitado e não salvo.
+        return carregarWebhooks();
       }
       if (acao === 'alternar') {
         await api(`/webhooks/${id}`, { metodo: 'PATCH', corpo: { ativo: !webhook.ativo } });
@@ -1138,17 +1195,13 @@ async function telaAcessos(container) {
           </label>
         </div>
         <p class="dica">
-          O setor serve para mandar aviso só para um time — no público alvo de
-          um envio, de um webhook, ou marcando uma categoria como sendo dele.
-          Uma pessoa pode estar em mais de um setor.
+          O setor é como o time é segmentado: no <b>público alvo</b> de um
+          envio manual ou de um webhook, você escolhe quais setores recebem.
+          Uma pessoa pode estar em mais de um.
         </p>
-        <p class="dica dica--atencao">
-          <b>Como as categorias são divididas:</b> quem está <b>sem setor</b>
-          recebe as categorias gerais (as que não são de time nenhum). Quem
-          entra em um ou mais setores passa a receber <b>somente as desses
-          setores</b> — e deixa de receber as gerais. Antes de marcar alguém,
-          confira em <b>Tipos</b> se o setor dela já tem as categorias que ela
-          precisa acompanhar.
+        <p class="dica">
+          Quem está sem setor não é alcançado por um envio dirigido a um setor
+          — só pelos que vão para todo o time ou para um nível de acesso.
         </p>
         <p class="erro" id="erro-setor" hidden></p>
         <button type="submit" class="botao">Criar setor</button>
@@ -1197,7 +1250,7 @@ async function telaAcessos(container) {
                      )
                      .join('')}
                  </div>
-                 <p class="dica">Pode marcar mais de um. Marcando algum, a pessoa passa a receber somente as categorias desses setores. Sem marcar nenhum, ela recebe as categorias gerais.</p>
+                 <p class="dica">Pode marcar mais de um. É por aqui que os envios dirigidos a um setor encontram a pessoa.</p>
                </div>`
             : ''
         }
@@ -1414,18 +1467,6 @@ async function carregarPreferencias() {
   try {
     const { tipos } = await api('/push/preferencias');
 
-    /*
-     * Agrupa por setor. As de uso geral vêm primeiro, sem cabeçalho; as do
-     * setor da pessoa vêm depois, com o nome do time em cima — assim fica
-     * claro por que só ela enxerga aquelas.
-     */
-    const grupos = [];
-    for (const t of tipos) {
-      const chave = t.setor || '';
-      if (!grupos.length || grupos.at(-1).setor !== chave) grupos.push({ setor: chave, itens: [] });
-      grupos.at(-1).itens.push(t);
-    }
-
     const linha = ({ tipo, rotulo, descricao, cor, ativo }) => `
         <li class="item preferencia">
           <div>
@@ -1438,13 +1479,7 @@ async function carregarPreferencias() {
           </label>
         </li>`;
 
-    lista.innerHTML = grupos
-      .map(
-        (g) =>
-          (g.setor ? `<li class="preferencia__setor">${esc(g.setor)}</li>` : '') +
-          g.itens.map(linha).join('')
-      )
-      .join('');
+    lista.innerHTML = tipos.map(linha).join('');
 
     lista.onchange = async (evento) => {
       const caixa = evento.target.closest('input[data-tipo]');
@@ -1621,7 +1656,6 @@ function itemCategoria(t) {
 
         <input name="rotulo" value="${esc(t.rotulo)}" maxlength="40" aria-label="Nome" />
         <select name="cor" aria-label="Cor">${opcoesDeCor(t.cor)}</select>
-        <select name="setor_id" aria-label="Setor">${opcoesDeSetor(t.setor_id, 'Todos os setores')}</select>
         <input
           name="descricao"
           value="${esc(t.descricao)}"
@@ -1641,7 +1675,6 @@ function itemCategoria(t) {
       </form>
       <div class="item__meta">
         <span><code>${esc(t.chave)}</code></span>
-        ${t.setor ? `<span>só o setor ${esc(t.setor)}</span>` : ''}
         ${t.fixo ? '<span>de fábrica</span>' : ''}
         ${t.silenciavel ? '' : '<span>não pode ser silenciada</span>'}
       </div>
@@ -1663,10 +1696,7 @@ async function telaCategorias(container) {
             <select name="cor">${opcoesDeCor('neutro')}</select>
           </label>
         </div>
-        <label class="campo">
-          <span>Setor</span>
-          <select name="setor_id">${opcoesDeSetor('', 'Todos os setores')}</select>
-        </label>
+
         <label class="campo">
           <span>Descrição</span>
           <input
@@ -1681,9 +1711,9 @@ async function telaCategorias(container) {
           <code>tipo</code>.
         </p>
         <p class="dica">
-          Sem setor, a categoria é <b>geral</b>: vai para quem não está em
-          time nenhum. Escolhendo um setor, ela passa a ir <b>só para quem é
-          daquele time</b> — e some da tela de preferências de todo o resto.
+          A categoria é só a <b>etiqueta</b> do aviso: a cor e o nome que
+          aparecem no histórico. Ela não decide quem recebe — isso é o
+          <b>público alvo</b>, no envio ou no webhook, que pode mirar um setor.
         </p>
         <p class="erro" id="erro-categoria" hidden></p>
         <button type="submit" class="botao botao--principal">Criar categoria</button>
@@ -1709,7 +1739,6 @@ async function telaCategorias(container) {
           rotulo: form.rotulo.value,
           cor: form.cor.value,
           descricao: form.descricao.value,
-          setor_id: form.setor_id.value,
         },
       });
       form.reset();
@@ -1739,7 +1768,6 @@ async function desenharCategorias() {
           rotulo: form.rotulo.value,
           cor: form.cor.value,
           descricao: form.descricao.value,
-          setor_id: form.setor_id.value,
         },
       });
       await desenharCategorias();

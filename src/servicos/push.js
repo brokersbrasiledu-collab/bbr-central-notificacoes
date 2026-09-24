@@ -26,54 +26,21 @@ export const vapidPronto = () => configurado;
 /**
  * Traduz o "público alvo" numa lista de aparelhos.
  *
+ * A categoria NÃO entra nesta conta: ela é só a etiqueta do aviso. Quem
+ * recebe o quê se decide aqui, pelo público — e é por setor que o time é
+ * segmentado.
+ *
  * Formatos aceitos em `publico`:
  *   "todos"                  → todo mundo ativo
  *   "admin" / "operador"...  → um ou mais níveis, separados por vírgula
  *   "setor:2" / "setor:2,5"  → um ou mais setores
  *   "usuarios:3,7"           → usuários específicos por id
  *
- * Além do público, dois filtros entram em cima: quem silenciou a
- * categoria e, se a categoria pertencer a um setor, quem não é dele.
+ * Em cima do público entra um filtro só: quem silenciou aquela categoria
+ * nas próprias preferências.
  */
 export function aparelhosDoPublico(publico = 'todos', tipo = null) {
   const alvo = String(publico || 'todos').trim();
-
-  /*
-   * Categoria de setor só chega a quem é daquele setor.
-   *
-   * A consulta é feita aqui, e não dentro do SQL, para que o filtro só
-   * exista quando fizer diferença: categoria sem setor (o caso de todas
-   * as que já estavam no ar) não ganha cláusula nenhuma e se comporta
-   * exatamente como antes.
-   */
-  const setorDoTipo = tipo
-    ? (db.prepare('SELECT setor_id FROM tipos WHERE chave = ?').get(tipo)?.setor_id ?? null)
-    : null;
-  /*
-   * Setor divide o time em dois casos, sem sobreposição:
-   *
-   *   • quem NÃO está em setor nenhum recebe as categorias gerais
-   *     (as que não pertencem a time algum);
-   *   • quem está em um ou mais setores recebe SOMENTE as categorias
-   *     desses setores.
-   *
-   * Ou seja: entrar num setor deixa de receber as gerais. É a regra
-   * pedida, e vale a pena ter em mente ao marcar alguém.
-   *
-   * Isto é sobre a categoria. O público alvo continua literal: um envio
-   * marcado como "setor:3" vai só para o setor 3, porque ali a escolha do
-   * destinatário foi explícita.
-   */
-  const semSetorNenhum =
-    ' AND NOT EXISTS (SELECT 1 FROM usuario_setores sem WHERE sem.usuario_id = u.id)';
-
-  const restricaoSetor = !tipo
-    ? ''
-    : setorDoTipo
-      ? ` AND EXISTS (
-            SELECT 1 FROM usuario_setores us
-             WHERE us.usuario_id = u.id AND us.setor_id = @setorDoTipo)`
-      : semSetorNenhum;
 
   // Quem silenciou este tipo sai do envio. A notificação continua no
   // histórico: o filtro é só do push, não do que o time consegue ver.
@@ -87,12 +54,9 @@ export function aparelhosDoPublico(publico = 'todos', tipo = null) {
     SELECT a.id, a.endpoint, a.p256dh, a.auth, a.usuario_id
       FROM aparelhos a
       JOIN usuarios u ON u.id = a.usuario_id
-     WHERE u.ativo = 1${semSilenciados}${restricaoSetor}`;
+     WHERE u.ativo = 1${semSilenciados}`;
 
-  const comuns = {
-    ...(tipo ? { tipoSilenciado: tipo } : {}),
-    ...(setorDoTipo ? { setorDoTipo } : {}),
-  };
+  const comuns = tipo ? { tipoSilenciado: tipo } : {};
 
   if (alvo === 'todos' || alvo === '') {
     return db.prepare(base).all(comuns);

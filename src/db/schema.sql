@@ -89,6 +89,9 @@ CREATE TABLE IF NOT EXISTS preferencias_tipo (
 -- Nenhuma outra tabela declara CHECK sobre "tipo": uma lista fixa lá
 -- impediria justamente a criação de categorias novas. A validação é
 -- feita na aplicação, contra esta tabela.
+--
+-- A categoria é só a etiqueta do aviso: ela não decide quem recebe.
+-- Segmentação de público é por setor, no público alvo do envio.
 CREATE TABLE IF NOT EXISTS tipos (
   chave       TEXT    PRIMARY KEY,   -- identificador curto, sem acento
   rotulo      TEXT    NOT NULL,      -- como aparece na tela
@@ -102,10 +105,7 @@ CREATE TABLE IF NOT EXISTS tipos (
   -- quebrado para quem tivesse desligado.
   silenciavel INTEGER NOT NULL DEFAULT 1,
   ordem       INTEGER NOT NULL DEFAULT 100,
-  criado_em   TEXT    NOT NULL DEFAULT (datetime('now')),
-  -- Categoria de um setor só é entregue a quem é daquele setor, e só
-  -- aparece na tela de preferências dessas pessoas. NULL = de todos.
-  setor_id    INTEGER REFERENCES setores(id) ON DELETE SET NULL
+  criado_em   TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Categorias de fábrica. INSERT OR IGNORE: quem já tem o banco criado

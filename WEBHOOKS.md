@@ -92,22 +92,9 @@ Se você não mandar `tipo`, vale o que foi escolhido na criação do webhook.
 Mandando no JSON, o **mesmo webhook** serve para vários assuntos — dá para ter
 um só gatilho para a Virtu e diferenciar venda aprovada de pagamento recusado.
 
-### Categoria de um setor
-
-Os setores dividem o time em dois casos, sem sobreposição:
-
-| Pessoa | Recebe |
-| --- | --- |
-| **Sem setor** | as categorias **gerais** (as que não pertencem a time nenhum) |
-| **Em um ou mais setores** | **somente** as categorias desses setores |
-
-Ou seja, entrar num setor deixa de receber as gerais. Vale conferir, antes de
-marcar alguém, se o setor dela já tem as categorias que ela precisa acompanhar.
-
-As cinco categorias de fábrica (`lead`, `meta`, `alerta`, `aviso`, `sistema`)
-nascem **gerais**. Se o seu time já está dividido em setores e você quer que
-uma delas continue chegando, marque essa categoria com o setor — ou crie uma
-equivalente dentro dele.
+> **A categoria não segmenta ninguém.** Ela é só a etiqueta e a cor que
+> aparecem no histórico. Quem recebe o quê se decide pelo **público alvo**, e é
+> por **setor** que o time é dividido.
 
 ---
 
@@ -128,9 +115,11 @@ O `setor` aceita o nome (sem diferenciar maiúsculas) ou o id. Quando vem, ele
 manda: a notificação vai só para aquele time, ignorando o público cadastrado no
 webhook.
 
-Aqui a regra é literal — vai **só** para quem é do setor, inclusive deixando de
-fora quem não tem setor nenhum. É diferente da categoria: ali o setor é uma
-característica do assunto; aqui é uma escolha explícita de destinatário.
+A regra é literal — vai **só** para quem está naquele setor.
+
+Na maioria dos casos você nem precisa deste campo: basta definir o **público
+alvo** do webhook no painel, em **Webhooks → Editar**. Endereço e chave não
+mudam, então o n8n continua funcionando sem nenhum ajuste.
 
 **Valor ausente ou desconhecido é ignorado** e vale o público do webhook. Isso é
 proposital — nenhuma chamada que já funciona pode passar a falhar, nem a mudar

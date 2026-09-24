@@ -18,11 +18,8 @@ export const CORES = ['ouro', 'vermelho', 'verde', 'azul', 'neutro'];
 export function listarTipos() {
   return db
     .prepare(
-      `SELECT t.chave, t.rotulo, t.descricao, t.cor, t.fixo, t.silenciavel, t.ordem,
-              t.setor_id, s.nome AS setor
-         FROM tipos t
-         LEFT JOIN setores s ON s.id = t.setor_id
-        ORDER BY t.ordem, t.rotulo COLLATE NOCASE`
+      `SELECT chave, rotulo, descricao, cor, fixo, silenciavel, ordem
+         FROM tipos ORDER BY ordem, rotulo COLLATE NOCASE`
     )
     .all();
 }

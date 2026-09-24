@@ -75,10 +75,6 @@ rotasSetores.delete('/:id', exigirNivel('admin'), (req, res) => {
   const pessoas = db
     .prepare('SELECT COUNT(*) AS n FROM usuario_setores WHERE setor_id = ?')
     .get(setor.id).n;
-  const categorias = db
-    .prepare('SELECT COUNT(*) AS n FROM tipos WHERE setor_id = ?')
-    .get(setor.id).n;
-
   // Webhooks e envios que miravam este setor ficariam sem destino.
   const alvo = `setor:${setor.id}`;
   const webhooks = db
@@ -96,9 +92,8 @@ rotasSetores.delete('/:id', exigirNivel('admin'), (req, res) => {
     });
   }
 
-  // Os vínculos com pessoas somem em cascata; a categoria que apontava
-  // para cá volta a valer para todos os setores.
+  // Os vínculos com pessoas somem em cascata.
   db.prepare('DELETE FROM setores WHERE id = ?').run(setor.id);
 
-  res.json({ ok: true, pessoasSemSetor: pessoas, categoriasSemSetor: categorias });
+  res.json({ ok: true, pessoasSemSetor: pessoas });
 });

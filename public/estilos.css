@@ -487,6 +487,16 @@ h2 {
   line-height: 1.5;
 }
 
+/* Formulário de edição que abre dentro de um item da lista. */
+.edicao {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--borda);
+}
+
 /* Aviso dentro de um formulário: mesma discrição da dica, com o fio
    dourado à esquerda para o olho parar ali antes de agir. */
 .dica--atencao {

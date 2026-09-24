@@ -9,7 +9,6 @@ import { Router } from 'express';
 import { db } from '../db/index.js';
 import { exigirLogin, exigirNivel } from '../middlewares/auth.js';
 import { listarTipos, buscarTipo, gerarChave, CORES } from '../servicos/tipos.js';
-import { setorIdValido } from '../servicos/setores.js';
 
 export const rotasTipos = Router();
 
@@ -50,13 +49,10 @@ rotasTipos.post('/', exigirNivel('admin'), (req, res) => {
   // Entra no fim da lista, sem embaralhar a ordem das já existentes.
   const ultima = db.prepare('SELECT MAX(ordem) AS n FROM tipos').get().n || 0;
 
-  // Categoria de setor só é entregue a quem é daquele time.
-  const setorId = setorIdValido(req.body?.setor_id);
-
   db.prepare(
-    `INSERT INTO tipos (chave, rotulo, descricao, cor, fixo, silenciavel, ordem, setor_id)
-     VALUES (?, ?, ?, ?, 0, 1, ?, ?)`
-  ).run(chave, rotulo, descricao, cor, ultima + 10, setorId);
+    `INSERT INTO tipos (chave, rotulo, descricao, cor, fixo, silenciavel, ordem)
+     VALUES (?, ?, ?, ?, 0, 1, ?)`
+  ).run(chave, rotulo, descricao, cor, ultima + 10);
 
   res.status(201).json({ tipo: buscarTipo(chave) });
 });
@@ -76,12 +72,12 @@ rotasTipos.patch('/:chave', exigirNivel('admin'), (req, res) => {
 
   // A chave nunca muda: ela já está gravada em cada notificação do
   // histórico e nos webhooks que as integrações disparam.
-  const setorId =
-    req.body?.setor_id !== undefined ? setorIdValido(req.body.setor_id) : atual.setor_id;
-
-  db.prepare(
-    'UPDATE tipos SET rotulo = ?, descricao = ?, cor = ?, setor_id = ? WHERE chave = ?'
-  ).run(rotulo, descricao, cor, setorId, atual.chave);
+  db.prepare('UPDATE tipos SET rotulo = ?, descricao = ?, cor = ? WHERE chave = ?').run(
+    rotulo,
+    descricao,
+    cor,
+    atual.chave
+  );
 
   res.json({ tipo: buscarTipo(atual.chave) });
 });
