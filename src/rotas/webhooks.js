@@ -128,6 +128,52 @@ rotasWebhooks.post('/:id/rotacionar-chave', (req, res) => {
   res.json({ webhook: comEndereco(db.prepare('SELECT * FROM webhooks WHERE id = ?').get(id)) });
 });
 
+/**
+ * Aplica o público atual do webhook ao histórico que ele já gerou.
+ *
+ * O público fica gravado em cada notificação no momento do disparo, e é
+ * ele que decide quem enxerga aquela linha depois. Por isso um webhook
+ * reapontado para um setor não reorganiza o passado sozinho: os avisos
+ * antigos continuam com o público que tinham.
+ *
+ * Esta rota reescreve esse campo nas notificações daquele webhook —
+ * serve para segmentar de uma vez o histórico que nasceu antes dos
+ * setores existirem.
+ *
+ * Envios manuais não são tocados: ali o público foi uma escolha
+ * explícita de quem enviou, e não a configuração de um gatilho.
+ *
+ * Sem ?confirmar=sim a resposta é 409 com a contagem, para a interface
+ * mostrar quantas linhas mudam antes de alguém decidir. Não há desfazer.
+ */
+rotasWebhooks.post('/:id/aplicar-publico', (req, res) => {
+  const webhook = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(Number(req.params.id));
+  if (!webhook) return res.status(404).json({ erro: 'Webhook não encontrado.' });
+
+  const afetadas = db
+    .prepare('SELECT COUNT(*) AS n FROM notificacoes WHERE webhook_id = ? AND publico != ?')
+    .get(webhook.id, webhook.publico).n;
+
+  if (!afetadas) {
+    return res.json({ ok: true, alteradas: 0, semMudanca: true });
+  }
+
+  if (req.query.confirmar !== 'sim') {
+    return res.status(409).json({
+      erro:
+        `${afetadas} aviso(s) deste webhook estão no histórico com outro público. ` +
+        `Aplicar o público atual muda quem enxerga essas linhas daqui em diante.`,
+      afetadas,
+    });
+  }
+
+  const info = db
+    .prepare('UPDATE notificacoes SET publico = ? WHERE webhook_id = ?')
+    .run(webhook.publico, webhook.id);
+
+  res.json({ ok: true, alteradas: info.changes });
+});
+
 rotasWebhooks.delete('/:id', (req, res) => {
   const info = db.prepare('DELETE FROM webhooks WHERE id = ?').run(Number(req.params.id));
   if (!info.changes) return res.status(404).json({ erro: 'Webhook não encontrado.' });

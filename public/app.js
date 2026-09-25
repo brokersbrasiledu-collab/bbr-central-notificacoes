@@ -858,6 +858,7 @@ function cartaoWebhook(w) {
           <button class="botao botao--pequeno" data-acao="editar">Editar</button>
           <button class="botao botao--pequeno" data-acao="usar">Como usar</button>
           <button class="botao botao--pequeno" data-acao="alternar">${w.ativo ? 'Desativar' : 'Ativar'}</button>
+          <button class="botao botao--pequeno" data-acao="aplicar-publico">Aplicar ao histórico</button>
           <button class="botao botao--pequeno" data-acao="rotacionar">Nova chave</button>
           <button class="botao botao--pequeno botao--perigo" data-acao="excluir">Excluir</button>
         </div>
@@ -1111,6 +1112,29 @@ async function carregarWebhooks() {
       }
       if (acao === 'alternar') {
         await api(`/webhooks/${id}`, { metodo: 'PATCH', corpo: { ativo: !webhook.ativo } });
+      }
+      if (acao === 'aplicar-publico') {
+        // Reescreve o público dos avisos antigos deste webhook, para o
+        // histórico ficar segmentado como ele está hoje.
+        const alvo = rotuloPublico(webhook.publico);
+        try {
+          const r = await api(`/webhooks/${id}/aplicar-publico`, { metodo: 'POST' });
+          avisar(
+            r.semMudanca
+              ? 'O histórico deste webhook já está com o público atual.'
+              : `${r.alteradas} aviso(s) atualizados.`,
+            'ok'
+          );
+          return;
+        } catch (e) {
+          if (e.status !== 409) return avisar(e.message, 'erro');
+          if (!confirm(`${e.message}\n\nPassar esses avisos para "${alvo}"? Não dá para desfazer.`)) {
+            return;
+          }
+          const r = await api(`/webhooks/${id}/aplicar-publico?confirmar=sim`, { metodo: 'POST' });
+          avisar(`${r.alteradas} aviso(s) do histórico passaram para "${alvo}".`, 'ok');
+          return;
+        }
       }
       if (acao === 'rotacionar') {
         if (!confirm('Gerar uma chave nova? A chave atual para de funcionar na hora.')) return;
