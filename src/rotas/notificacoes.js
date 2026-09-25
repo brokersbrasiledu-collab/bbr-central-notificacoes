@@ -22,10 +22,22 @@ const PERIODOS = { hoje: 0, '7d': 6, '30d': 29 };
 /*
  * Quem enxerga qual notificação no histórico.
  *
- * A linha do tempo deixou de ser um mural único: cada pessoa vê o que foi
- * endereçado a ela. A regra espelha exatamente a da entrega, lendo o mesmo
- * campo `publico` que foi gravado junto da notificação — assim o histórico
- * nunca mostra algo que o celular não recebeu, nem esconde algo que tocou.
+ * A linha do tempo deixou de ser um mural único. A regra é o setor:
+ *
+ *   • em um ou mais setores → vê o que foi endereçado a esses setores
+ *     (mais o que foi para todo o time, para o nível dela ou para ela);
+ *   • em setor nenhum       → vê TUDO, a empresa inteira.
+ *
+ * O segundo caso é o que permite dar acompanhamento completo a alguém sem
+ * precisar torná-la administradora: é só não colocar em setor algum.
+ *
+ * Abaixo está a condição do primeiro caso. Ela lê o mesmo campo `publico`
+ * gravado junto da notificação, o mesmo que decide a entrega do push.
+ *
+ * Uma diferença de propósito: quem está em setor nenhum VÊ tudo aqui, mas
+ * continua recebendo no celular só o que foi endereçado a ela. Histórico é
+ * registro, push é interrupção — acompanhar a empresa inteira não deveria
+ * significar o telefone tocando a cada lead de outro time.
  *
  * O campo guarda quatro formatos, e o SQL abaixo cobre os quatro:
  *
@@ -71,12 +83,16 @@ rotasNotificacoes.get('/', exigirLogin, (req, res) => {
   const periodo = Object.hasOwn(PERIODOS, req.query.periodo) ? req.query.periodo : null;
 
   /*
-   * O administrador enxerga tudo por padrão: é quem configura os gatilhos
-   * e limpa os testes, e não teria como conferir um envio dirigido a um
-   * setor do qual não faz parte. Com ?escopo=meu ele vê o que veria se
-   * fosse um membro comum — serve justamente para testar a segmentação.
+   * Quem não está em setor nenhum acompanha a empresa inteira — inclusive
+   * sem ser administrador.
+   *
+   * O administrador que ESTÁ num setor vê o setor dele, como todo mundo.
+   * Com ?escopo=tudo ele pede a visão completa, que é o que permite
+   * conferir um envio ou apagar um teste de um setor do qual não faz parte.
    */
-  const verTudo = req.usuario.nivel === 'admin' && req.query.escopo !== 'meu';
+  const semSetor = !(req.usuario.setores || []).length;
+  const adminPediuTudo = req.usuario.nivel === 'admin' && req.query.escopo === 'tudo';
+  const verTudo = semSetor || adminPediuTudo;
 
   const condicoes = [];
   const valores = [];

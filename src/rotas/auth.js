@@ -48,6 +48,17 @@ rotasAuth.post('/login', limiteLogin, (req, res) => {
       nome: usuario.nome,
       email: usuario.email,
       nivel: usuario.nivel,
+      // A interface precisa saber os setores já no login: é o que decide
+      // o recorte do histórico e se o seletor de abrangência faz sentido.
+      setores: db
+        .prepare(
+          `SELECT s.id, s.nome
+             FROM usuario_setores us
+             JOIN setores s ON s.id = us.setor_id
+            WHERE us.usuario_id = ?
+            ORDER BY s.nome COLLATE NOCASE`
+        )
+        .all(usuario.id),
     },
   });
 });

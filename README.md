@@ -6,7 +6,8 @@ do tempo.
 
 As notificações chegam de duas formas: **automática** (um webhook dispara quando algo
 acontece no funil) e **manual** (o admin monta e envia a mensagem na hora). Todo mundo que
-loga vê no histórico os avisos endereçados a si, do mais recente para o mais antigo.
+loga vê no histórico o que chega até si, do mais recente para o mais antigo: quem
+está num setor vê o do setor; quem não está em nenhum acompanha a empresa inteira.
 
 Push pelo protocolo **Web Push com chaves VAPID** — direto para os servidores do Google e da
 Apple. Não passa por Meta e não tem custo por mensagem.

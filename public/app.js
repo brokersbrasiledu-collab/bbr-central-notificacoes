@@ -565,10 +565,13 @@ function telaHistorico(container) {
         ${opcoesDeTipo(filtros.tipo)}
       </select>
       ${
-        ehAdmin()
+        // O seletor só faz sentido para um admin que ESTÁ num setor: sem
+        // setor, ele já enxerga a empresa inteira e as duas opções seriam
+        // a mesma coisa.
+        ehAdmin() && estado.usuario?.setores?.length
           ? `<select id="f-escopo" class="filtros__campo" aria-label="Abrangência">
-               <option value="" ${filtros.escopo === '' ? 'selected' : ''}>Tudo (admin)</option>
-               <option value="meu" ${filtros.escopo === 'meu' ? 'selected' : ''}>Só o que eu recebo</option>
+               <option value="" ${filtros.escopo === '' ? 'selected' : ''}>Meus setores</option>
+               <option value="tudo" ${filtros.escopo === 'tudo' ? 'selected' : ''}>Ver tudo (admin)</option>
              </select>`
           : ''
       }
@@ -1837,7 +1840,7 @@ const ICONES = {
 const TELAS = {
   historico: {
     titulo: 'Histórico',
-    subtitulo: 'Os avisos endereçados a você, do mais recente para o mais antigo.',
+    subtitulo: 'O que chega até você, do mais recente para o mais antigo.',
     render: telaHistorico,
     nivel: 'membro',
   },
