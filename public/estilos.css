@@ -334,6 +334,14 @@ select {
   white-space: nowrap;
 }
 
+.usuario__setores {
+  font-size: 11px;
+  color: var(--texto-fraco);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .usuario__nivel {
   font-size: 11px;
   letter-spacing: 0.07em;

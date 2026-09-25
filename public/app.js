@@ -505,13 +505,22 @@ function cartaoAviso(n) {
         ? `Envio manual${n.autor ? ` · ${esc(n.autor)}` : ''}`
         : 'Sistema';
 
-  const rodape = ehAdmin()
-    ? `<div class="aviso__rodape">
-         <span>${origem}</span>
-         <span>${esc(rotuloPublico(n.publico))}</span>
-         ${n.entregues ? `<span>${n.entregues} entregue(s)</span>` : ''}
-       </div>`
-    : '';
+  /*
+   * O rodapé aparece para todo mundo, não só para o admin.
+   *
+   * Ele mostra para quem aquele aviso foi endereçado, que é exatamente o
+   * que decide se a linha entra ou não no histórico de cada pessoa. Sem
+   * isso, um aviso antigo marcado como "Todo o time" parece falha do
+   * recorte quando na verdade é o público com que ele nasceu.
+   *
+   * A contagem de entregas continua só para o admin: é número de operação.
+   */
+  const rodape = `
+    <div class="aviso__rodape">
+      <span>${origem}</span>
+      <span>Para: ${esc(rotuloPublico(n.publico))}</span>
+      ${ehAdmin() && n.entregues ? `<span>${n.entregues} entregue(s)</span>` : ''}
+    </div>`;
 
   return `
     <article class="aviso aviso--${esc(corTipo(n.tipo))}" data-id="${n.id}">
@@ -1977,6 +1986,14 @@ async function entrarNoApp(usuario) {
   $('#app').hidden = false;
 
   $('#usuario-atual').querySelector('.usuario__nome').textContent = usuario.nome;
+  // Mostrar o setor aqui é diagnóstico barato: se alguém reclama que vê
+  // demais ou de menos no histórico, a primeira pergunta é em que setor
+  // ela está — e a resposta fica na tela, sem abrir a tela de Acessos.
+  const setores = usuario.setores || [];
+  $('#usuario-atual').querySelector('.usuario__setores').textContent = setores.length
+    ? setores.map((s) => s.nome).join(' · ')
+    : 'sem setor — vê tudo';
+
   $('#usuario-atual').querySelector('.usuario__nivel').textContent =
     ROTULO_NIVEL[usuario.nivel] || usuario.nivel;
 
