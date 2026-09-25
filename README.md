@@ -284,6 +284,7 @@ Sessão em cookie `httpOnly`. Todas as respostas são JSON.
 | --- | --- | --- |
 | GET / POST | `/api/webhooks` | admin |
 | PATCH / DELETE | `/api/webhooks/:id` | admin |
+| POST | `/api/webhooks/reprocessar-historico` | admin |
 | POST | `/api/webhooks/:id/aplicar-publico` | admin |
 | POST | `/api/webhooks/:id/rotacionar-chave` | admin |
 | POST | `/api/webhooks/previa` | admin |

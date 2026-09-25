@@ -35,6 +35,9 @@ async function api(caminho, opcoes = {}) {
   if (!resposta.ok) {
     const erro = new Error(dados.erro || 'Não foi possível concluir a ação.');
     erro.status = resposta.status;
+    // O corpo inteiro vai junto: várias respostas de 409 trazem números
+    // que a tela precisa mostrar antes de o usuário confirmar.
+    erro.dados = dados;
     throw erro;
   }
   return dados;
@@ -937,6 +940,13 @@ async function telaWebhooks(container) {
 
     <div class="bloco">
       <button type="button" class="botao" id="abrir-novo">+ Novo gatilho</button>
+      <button type="button" class="botao" id="reprocessar">Reprocessar histórico</button>
+      <p class="dica">
+        <b>Reprocessar</b> passa todo o histórico vindo de webhook para o
+        público que cada gatilho tem hoje. É o que organiza de uma vez os
+        avisos disparados antes de os setores existirem — quem entra no time
+        agora não encontra meses de avisos de outros setores.
+      </p>
     </div>
 
     <div class="bloco" id="area-novo" hidden>
@@ -1014,6 +1024,44 @@ async function telaWebhooks(container) {
 
   // O formulário nasce fechado: no dia a dia a tela serve para consultar
   // o endereço e a chave, não para criar gatilho.
+  $('#reprocessar').addEventListener('click', async (evento) => {
+    const botao = evento.target;
+    try {
+      const r = await api('/webhooks/reprocessar-historico', { metodo: 'POST' });
+      return avisar(
+        r.semMudanca ? 'O histórico já está organizado pelos setores.' : `${r.alteradas} atualizados.`,
+        'ok'
+      );
+    } catch (e) {
+      if (e.status !== 409) return avisar(e.message, 'erro');
+
+      // O servidor manda o resumo por webhook: mostrar antes de escrever.
+      const detalhe = e.dados.porWebhook
+        .map((w) => `  • ${w.nome} → ${rotuloPublico(w.publico)} (${w.quantidade})`)
+        .join('\n');
+      const sobram = e.dados.manuais + e.dados.orfas;
+      const nota = sobram
+        ? `\n\n${sobram} aviso(s) continuam visíveis para todo mundo: ` +
+          `${e.dados.manuais} envio(s) manual(is) e ${e.dados.orfas} de webhook já excluído. ` +
+          `Esses só saem apagando um a um.`
+        : '';
+
+      if (!confirm(`${e.message}\n\n${detalhe}${nota}\n\nAplicar? Não dá para desfazer.`)) return;
+
+      botao.disabled = true;
+      botao.textContent = 'Reprocessando…';
+      try {
+        const r = await api('/webhooks/reprocessar-historico?confirmar=sim', { metodo: 'POST' });
+        avisar(`${r.alteradas} aviso(s) do histórico reorganizados por setor.`, 'ok');
+      } catch (erro2) {
+        avisar(erro2.message, 'erro');
+      } finally {
+        botao.disabled = false;
+        botao.textContent = 'Reprocessar histórico';
+      }
+    }
+  });
+
   $('#abrir-novo').addEventListener('click', (evento) => {
     const area = $('#area-novo');
     area.hidden = !area.hidden;
@@ -1451,6 +1499,18 @@ async function desenharSetores() {
   };
 }
 
+/** Relê a sessão do servidor e atualiza a lateral. */
+async function recarregarSessao() {
+  try {
+    const { usuario } = await api('/auth/eu');
+    estado.usuario = usuario;
+    mostrarUsuarioNaLateral(usuario);
+    montarMenu();
+  } catch {
+    /* sessão caiu; o próximo pedido já trata */
+  }
+}
+
 async function carregarUsuarios() {
   const lista = $('#lista-usuarios');
   const { itens } = await api('/usuarios');
@@ -1466,6 +1526,14 @@ async function carregarUsuarios() {
         await api(`/usuarios/${id}`, { metodo: 'PATCH', corpo: { nivel: elemento.value } });
         avisar('Nível atualizado.', 'ok');
       }
+      /*
+       * Mexer nos próprios setores muda o que ESTA sessão enxerga no
+       * histórico. A lateral e o recorte leem de estado.usuario, então
+       * ele precisa ser recarregado — senão a tela continua mostrando o
+       * setor antigo até alguém recarregar a página na mão.
+       */
+      const mexendoEmMim = id === estado.usuario.id;
+
       if (acao === 'por-setor' && elemento.value) {
         const novos = [...usuario.setores.map((s) => s.id), Number(elemento.value)];
         await api(`/usuarios/${id}`, { metodo: 'PATCH', corpo: { setores: novos } });
@@ -1490,6 +1558,7 @@ async function carregarUsuarios() {
         if (!confirm(`Excluir a conta de ${usuario.nome}?`)) return;
         await api(`/usuarios/${id}`, { metodo: 'DELETE' });
       }
+      if (mexendoEmMim) await recarregarSessao();
       await carregarUsuarios();
     } catch (e) {
       avisar(e.message, 'erro');
@@ -1980,22 +2049,31 @@ function mostrarLogin() {
   $('#app').hidden = true;
 }
 
+/**
+ * Nome, nível e setores de quem está logado, na lateral.
+ *
+ * Mostrar o setor aqui é diagnóstico barato: quando alguém reclama que vê
+ * demais ou de menos no histórico, a primeira pergunta é em que setor ela
+ * está — e a resposta fica na tela, sem precisar abrir Acessos.
+ */
+function mostrarUsuarioNaLateral(usuario) {
+  const caixa = $('#usuario-atual');
+  const setores = usuario.setores || [];
+
+  caixa.querySelector('.usuario__nome').textContent = usuario.nome;
+  caixa.querySelector('.usuario__nivel').textContent =
+    ROTULO_NIVEL[usuario.nivel] || usuario.nivel;
+  caixa.querySelector('.usuario__setores').textContent = setores.length
+    ? setores.map((s) => s.nome).join(' · ')
+    : 'sem setor — vê tudo';
+}
+
 async function entrarNoApp(usuario) {
   estado.usuario = usuario;
   $('#tela-login').hidden = true;
   $('#app').hidden = false;
 
-  $('#usuario-atual').querySelector('.usuario__nome').textContent = usuario.nome;
-  // Mostrar o setor aqui é diagnóstico barato: se alguém reclama que vê
-  // demais ou de menos no histórico, a primeira pergunta é em que setor
-  // ela está — e a resposta fica na tela, sem abrir a tela de Acessos.
-  const setores = usuario.setores || [];
-  $('#usuario-atual').querySelector('.usuario__setores').textContent = setores.length
-    ? setores.map((s) => s.nome).join(' · ')
-    : 'sem setor — vê tudo';
-
-  $('#usuario-atual').querySelector('.usuario__nivel').textContent =
-    ROTULO_NIVEL[usuario.nivel] || usuario.nivel;
+  mostrarUsuarioNaLateral(usuario);
 
   // Antes de desenhar qualquer tela: rótulos, cores, setores e filtros
   // dependem disto.

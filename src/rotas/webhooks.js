@@ -129,6 +129,78 @@ rotasWebhooks.post('/:id/rotacionar-chave', (req, res) => {
 });
 
 /**
+ * Reprocessa o histórico inteiro de uma vez.
+ *
+ * Passa por todas as notificações que vieram de webhook e grava nelas o
+ * público que aquele webhook tem hoje. É o que organiza de um golpe o
+ * histórico nascido antes de os setores existirem — sem isso, quem entra
+ * no time hoje abre o aplicativo e encontra meses de avisos de setores
+ * que não são dele.
+ *
+ * O que NÃO é tocado, e por quê:
+ *
+ *   • envios manuais — ali o público foi decisão de quem enviou, não
+ *     configuração de um gatilho;
+ *   • avisos de webhooks já excluídos — não há de onde tirar o setor.
+ *
+ * Os dois casos vão na resposta, para a interface dizer quantos avisos
+ * continuam visíveis para todo mundo depois do reprocessamento.
+ *
+ * Sem ?confirmar=sim devolve 409 com o resumo. Não há desfazer.
+ */
+rotasWebhooks.post('/reprocessar-historico', (req, res) => {
+  const porWebhook = db
+    .prepare(
+      `SELECT w.id, w.nome, w.publico, COUNT(*) AS quantidade
+         FROM notificacoes n
+         JOIN webhooks w ON w.id = n.webhook_id
+        WHERE n.publico != w.publico
+        GROUP BY w.id
+        ORDER BY quantidade DESC`
+    )
+    .all();
+
+  // Ficam de fora do reprocessamento e seguem visíveis para todo mundo.
+  const manuais = db
+    .prepare(`SELECT COUNT(*) AS n FROM notificacoes WHERE webhook_id IS NULL AND publico = 'todos'`)
+    .get().n;
+  const orfas = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM notificacoes n
+        WHERE n.webhook_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM webhooks w WHERE w.id = n.webhook_id)`
+    )
+    .get().n;
+
+  const total = porWebhook.reduce((soma, w) => soma + w.quantidade, 0);
+
+  if (!total) {
+    return res.json({ ok: true, alteradas: 0, semMudanca: true, manuais, orfas });
+  }
+
+  if (req.query.confirmar !== 'sim') {
+    return res.status(409).json({
+      erro: `${total} aviso(s) do histórico vão passar para o público atual do webhook que os gerou.`,
+      total,
+      porWebhook,
+      manuais,
+      orfas,
+    });
+  }
+
+  const aplicar = db.transaction(() => {
+    const atualizar = db.prepare(
+      'UPDATE notificacoes SET publico = ? WHERE webhook_id = ? AND publico != ?'
+    );
+    let alteradas = 0;
+    for (const w of porWebhook) alteradas += atualizar.run(w.publico, w.id, w.publico).changes;
+    return alteradas;
+  });
+
+  res.json({ ok: true, alteradas: aplicar(), manuais, orfas });
+});
+
+/**
  * Aplica o público atual do webhook ao histórico que ele já gerou.
  *
  * O público fica gravado em cada notificação no momento do disparo, e é
