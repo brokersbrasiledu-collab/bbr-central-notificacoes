@@ -19,6 +19,50 @@ export const rotasNotificacoes = Router();
  */
 const PERIODOS = { hoje: 0, '7d': 6, '30d': 29 };
 
+/*
+ * Quem enxerga qual notificação no histórico.
+ *
+ * A linha do tempo deixou de ser um mural único: cada pessoa vê o que foi
+ * endereçado a ela. A regra espelha exatamente a da entrega, lendo o mesmo
+ * campo `publico` que foi gravado junto da notificação — assim o histórico
+ * nunca mostra algo que o celular não recebeu, nem esconde algo que tocou.
+ *
+ * O campo guarda quatro formatos, e o SQL abaixo cobre os quatro:
+ *
+ *   'todos'            → todo mundo
+ *   'setor:2,5'        → quem está em algum desses setores
+ *   'admin,operador'   → quem tem algum desses níveis
+ *   'usuarios:3,7'     → essas pessoas
+ *
+ * O truque do ',' || campo || ',' testa pertinência numa lista separada
+ * por vírgula sem precisar de função extra do SQLite: procurar por
+ * ",5," dentro de ",2,5," acerta o 5 e não confunde com 15 ou 51.
+ *
+ * Os padrões de busca são montados em JavaScript e entram prontos. Isso
+ * não é estilo: o better-sqlite3 liga número de JS como REAL, então um id
+ * 2 concatenado dentro do SQL viraria "2.0" e nunca casaria com ",2,".
+ */
+const SO_O_QUE_ME_CABE = `(
+  n.publico = 'todos' OR n.publico = ''
+  OR (
+    n.publico LIKE 'setor:%'
+    AND EXISTS (
+      SELECT 1 FROM usuario_setores us
+       WHERE us.usuario_id = ?
+         AND (',' || substr(n.publico, 7) || ',') LIKE ('%,' || us.setor_id || ',%')
+    )
+  )
+  OR (
+    n.publico LIKE 'usuarios:%'
+    AND (',' || substr(n.publico, 10) || ',') LIKE ?
+  )
+  OR (
+    n.publico NOT LIKE 'setor:%'
+    AND n.publico NOT LIKE 'usuarios:%'
+    AND (',' || n.publico || ',') LIKE ?
+  )
+)`;
+
 rotasNotificacoes.get('/', exigirLogin, (req, res) => {
   const limite = Math.min(Math.max(Number(req.query.limite) || 30, 1), 100);
   const antes = Number(req.query.antes) || null;
@@ -26,8 +70,21 @@ rotasNotificacoes.get('/', exigirLogin, (req, res) => {
   const busca = String(req.query.busca || '').trim().slice(0, 80);
   const periodo = Object.hasOwn(PERIODOS, req.query.periodo) ? req.query.periodo : null;
 
+  /*
+   * O administrador enxerga tudo por padrão: é quem configura os gatilhos
+   * e limpa os testes, e não teria como conferir um envio dirigido a um
+   * setor do qual não faz parte. Com ?escopo=meu ele vê o que veria se
+   * fosse um membro comum — serve justamente para testar a segmentação.
+   */
+  const verTudo = req.usuario.nivel === 'admin' && req.query.escopo !== 'meu';
+
   const condicoes = [];
   const valores = [];
+
+  if (!verTudo) {
+    condicoes.push(SO_O_QUE_ME_CABE);
+    valores.push(req.usuario.id, `%,${req.usuario.id},%`, `%,${req.usuario.nivel},%`);
+  }
 
   if (antes) {
     condicoes.push('n.id < ?');
@@ -66,19 +123,7 @@ rotasNotificacoes.get('/', exigirLogin, (req, res) => {
     .all(...valores, limite + 1);
 
   const temMais = itens.length > limite;
-  res.json({ itens: itens.slice(0, limite), temMais });
-});
-
-/** Contagem rápida por tipo — alimenta o resumo no topo do histórico. */
-rotasNotificacoes.get('/resumo', exigirLogin, (_req, res) => {
-  const total = db.prepare('SELECT COUNT(*) AS n FROM notificacoes').get().n;
-  const hoje = db
-    .prepare(`SELECT COUNT(*) AS n FROM notificacoes WHERE date(criada_em) = date('now')`)
-    .get().n;
-  const porTipo = db
-    .prepare('SELECT tipo, COUNT(*) AS n FROM notificacoes GROUP BY tipo')
-    .all();
-  res.json({ total, hoje, porTipo });
+  res.json({ itens: itens.slice(0, limite), temMais, verTudo });
 });
 
 /**

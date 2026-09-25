@@ -144,6 +144,9 @@ CREATE TABLE IF NOT EXISTS webhooks (
 -- ── notificacoes ────────────────────────────────────────────────
 -- Histórico. Toda notificação enviada (manual ou por webhook) vira
 -- uma linha aqui, e é isso que alimenta a linha do tempo.
+--
+-- O campo `publico` guarda para quem ela foi: é ele que decide tanto a
+-- entrega do push quanto quem enxerga a linha no histórico depois.
 CREATE TABLE IF NOT EXISTS notificacoes (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   titulo      TEXT    NOT NULL,

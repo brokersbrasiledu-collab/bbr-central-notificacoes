@@ -547,7 +547,7 @@ function agruparPorDia(itens) {
   return grupos;
 }
 
-const filtros = { busca: '', tipo: '', periodo: '' };
+const filtros = { busca: '', tipo: '', periodo: '', escopo: '' };
 
 function telaHistorico(container) {
   container.innerHTML = `
@@ -564,6 +564,14 @@ function telaHistorico(container) {
         <option value="">Todas as categorias</option>
         ${opcoesDeTipo(filtros.tipo)}
       </select>
+      ${
+        ehAdmin()
+          ? `<select id="f-escopo" class="filtros__campo" aria-label="Abrangência">
+               <option value="" ${filtros.escopo === '' ? 'selected' : ''}>Tudo (admin)</option>
+               <option value="meu" ${filtros.escopo === 'meu' ? 'selected' : ''}>Só o que eu recebo</option>
+             </select>`
+          : ''
+      }
       <select id="f-periodo" class="filtros__campo" aria-label="Filtrar por período">
         <option value="">Qualquer data</option>
         <option value="hoje" ${filtros.periodo === 'hoje' ? 'selected' : ''}>Hoje</option>
@@ -591,6 +599,10 @@ function telaHistorico(container) {
     filtros.periodo = e.target.value;
     carregarNotificacoes(true);
   });
+  $('#f-escopo')?.addEventListener('change', (e) => {
+    filtros.escopo = e.target.value;
+    carregarNotificacoes(true);
+  });
 
   return carregarNotificacoes(true);
 }
@@ -607,6 +619,7 @@ async function carregarNotificacoes(reiniciar = false) {
   if (filtros.busca.trim()) parametros.set('busca', filtros.busca.trim());
   if (filtros.tipo) parametros.set('tipo', filtros.tipo);
   if (filtros.periodo) parametros.set('periodo', filtros.periodo);
+  if (filtros.escopo) parametros.set('escopo', filtros.escopo);
 
   try {
     const { itens, temMais } = await api(`/notificacoes?${parametros}`);
@@ -619,7 +632,7 @@ async function carregarNotificacoes(reiniciar = false) {
       lista.innerHTML = `<div class="vazio">${
         filtrando
           ? 'Nada encontrado com esses filtros.'
-          : 'Nenhuma notificação por aqui ainda.'
+          : 'Nenhum aviso endereçado a você por aqui ainda.'
       }</div>`;
       areaMais.innerHTML = '';
       return;
@@ -1824,7 +1837,7 @@ const ICONES = {
 const TELAS = {
   historico: {
     titulo: 'Histórico',
-    subtitulo: 'Tudo que foi disparado, do mais recente para o mais antigo.',
+    subtitulo: 'Os avisos endereçados a você, do mais recente para o mais antigo.',
     render: telaHistorico,
     nivel: 'membro',
   },

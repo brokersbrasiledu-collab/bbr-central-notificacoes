@@ -6,7 +6,7 @@ do tempo.
 
 As notificações chegam de duas formas: **automática** (um webhook dispara quando algo
 acontece no funil) e **manual** (o admin monta e envia a mensagem na hora). Todo mundo que
-loga vê o mesmo histórico, da mais recente para a mais antiga.
+loga vê no histórico os avisos endereçados a si, do mais recente para o mais antigo.
 
 Push pelo protocolo **Web Push com chaves VAPID** — direto para os servidores do Google e da
 Apple. Não passa por Meta e não tem custo por mensagem.
@@ -272,8 +272,7 @@ Sessão em cookie `httpOnly`. Todas as respostas são JSON.
 
 | Método | Rota | Nível | O que faz |
 | --- | --- | --- | --- |
-| GET | `/api/notificacoes` | membro | Linha do tempo (`?limite=&antes=&tipo=`) |
-| GET | `/api/notificacoes/resumo` | membro | Contagem total e do dia |
+| GET | `/api/notificacoes` | membro | Linha do tempo, já recortada pelo que cabe a quem pede (`?limite=&antes=&tipo=&busca=&periodo=`; admin aceita `&escopo=meu`) |
 | GET | `/api/notificacoes/alcance` | operador | Quantos aparelhos um público atinge |
 | POST | `/api/notificacoes/enviar` | operador | Envio manual |
 | DELETE | `/api/notificacoes/:id` | admin | Apaga do histórico |

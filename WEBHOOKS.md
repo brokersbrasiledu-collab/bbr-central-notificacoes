@@ -135,7 +135,7 @@ você manda em `tipo`.
 
 Toda categoria nova nasce **ligada para todo o time**, e cada pessoa decide se
 quer receber em **Aparelho → Notificações que você recebe**. Silenciar afeta só
-o push: a notificação continua aparecendo no histórico compartilhado.
+o push: a notificação continua aparecendo no histórico de quem era o público alvo.
 
 Categorias de fábrica podem ser renomeadas e recoloridas, mas não excluídas —
 webhooks e integrações já criadas dependem delas.
