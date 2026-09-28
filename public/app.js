@@ -548,6 +548,74 @@ function cartaoAviso(n) {
     </article>`;
 }
 
+/**
+ * Barra de ações em lote, para o administrador organizar o histórico
+ * antigo sem apagar linha por linha.
+ *
+ * Só aparece com algum filtro ativo: sem recorte, mover ou apagar pegaria
+ * o histórico inteiro, e o servidor recusa por isso mesmo.
+ */
+function desenharLote() {
+  const area = $('#lote');
+  if (!area) return;
+
+  const temFiltro = Boolean(
+    filtros.busca.trim() || filtros.tipo || filtros.periodo || filtros.publico
+  );
+
+  if (!ehAdmin() || !temFiltro || !estado.notificacoes.length) {
+    area.hidden = true;
+    area.innerHTML = '';
+    return;
+  }
+
+  area.hidden = false;
+  area.innerHTML = `
+    <span class="lote__rotulo">Com o que está filtrado:</span>
+    <select id="lote-setor" aria-label="Setor de destino">
+      <option value="">Mover para…</option>
+      ${estado.setores.map((s) => `<option value="${s.id}">${esc(s.nome)}</option>`).join('')}
+    </select>
+    <button type="button" class="botao botao--pequeno botao--perigo" id="lote-excluir">
+      Excluir todos
+    </button>`;
+
+  $('#lote-setor').addEventListener('change', async (evento) => {
+    const id = evento.target.value;
+    if (!id) return;
+    evento.target.value = '';
+    await agirEmLote('mover-para-setor', { setor_id: id });
+  });
+
+  $('#lote-excluir').addEventListener('click', () => agirEmLote('excluir-em-lote'));
+}
+
+/** Executa uma ação em lote, confirmando com a contagem que o servidor devolve. */
+async function agirEmLote(acao, extras = {}) {
+  const parametros = new URLSearchParams(extras);
+  if (filtros.busca.trim()) parametros.set('busca', filtros.busca.trim());
+  if (filtros.tipo) parametros.set('tipo', filtros.tipo);
+  if (filtros.periodo) parametros.set('periodo', filtros.periodo);
+  if (filtros.publico) parametros.set('publico', filtros.publico);
+
+  try {
+    const r = await api(`/notificacoes/${acao}?${parametros}`, { metodo: 'POST' });
+    avisar(r.semMudanca ? 'Nada para mudar.' : `${r.afetadas} aviso(s) atualizados.`, 'ok');
+    return carregarNotificacoes(true);
+  } catch (e) {
+    if (e.status !== 409) return avisar(e.message, 'erro');
+    if (!confirm(`${e.message}\n\nConfirmar? Não dá para desfazer.`)) return;
+    try {
+      parametros.set('confirmar', 'sim');
+      const r = await api(`/notificacoes/${acao}?${parametros}`, { metodo: 'POST' });
+      avisar(`${r.afetadas} aviso(s) atualizados.`, 'ok');
+      await carregarNotificacoes(true);
+    } catch (erro2) {
+      avisar(erro2.message, 'erro');
+    }
+  }
+}
+
 /** Quebra a lista em blocos por dia, mantendo a ordem que veio. */
 function agruparPorDia(itens) {
   const grupos = [];
@@ -559,7 +627,7 @@ function agruparPorDia(itens) {
   return grupos;
 }
 
-const filtros = { busca: '', tipo: '', periodo: '', escopo: '' };
+const filtros = { busca: '', tipo: '', periodo: '', escopo: '', publico: '' };
 
 function telaHistorico(container) {
   container.innerHTML = `
@@ -587,6 +655,22 @@ function telaHistorico(container) {
              </select>`
           : ''
       }
+      ${
+        ehAdmin()
+          ? `<select id="f-publico" class="filtros__campo" aria-label="Filtrar por público">
+               <option value="">Qualquer público</option>
+               <option value="todos" ${filtros.publico === 'todos' ? 'selected' : ''}>Para: Todo o time</option>
+               ${estado.setores
+                 .map(
+                   (s) =>
+                     `<option value="setor:${s.id}" ${
+                       filtros.publico === `setor:${s.id}` ? 'selected' : ''
+                     }>Para: ${esc(s.nome)}</option>`
+                 )
+                 .join('')}
+             </select>`
+          : ''
+      }
       <select id="f-periodo" class="filtros__campo" aria-label="Filtrar por período">
         <option value="">Qualquer data</option>
         <option value="hoje" ${filtros.periodo === 'hoje' ? 'selected' : ''}>Hoje</option>
@@ -596,6 +680,7 @@ function telaHistorico(container) {
     </form>
 
     <div id="linha-tempo"></div>
+    <div id="lote" class="lote" hidden></div>
     <div id="mais-area"></div>`;
 
   // A busca espera a digitação parar, para não disparar uma consulta por tecla.
@@ -618,6 +703,10 @@ function telaHistorico(container) {
     filtros.escopo = e.target.value;
     carregarNotificacoes(true);
   });
+  $('#f-publico')?.addEventListener('change', (e) => {
+    filtros.publico = e.target.value;
+    carregarNotificacoes(true);
+  });
 
   return carregarNotificacoes(true);
 }
@@ -635,6 +724,7 @@ async function carregarNotificacoes(reiniciar = false) {
   if (filtros.tipo) parametros.set('tipo', filtros.tipo);
   if (filtros.periodo) parametros.set('periodo', filtros.periodo);
   if (filtros.escopo) parametros.set('escopo', filtros.escopo);
+  if (filtros.publico) parametros.set('publico', filtros.publico);
 
   try {
     const { itens, temMais } = await api(`/notificacoes?${parametros}`);
@@ -649,6 +739,7 @@ async function carregarNotificacoes(reiniciar = false) {
           ? 'Nada encontrado com esses filtros.'
           : 'Nenhum aviso endereçado a você por aqui ainda.'
       }</div>`;
+      desenharLote();
       areaMais.innerHTML = '';
       return;
     }
@@ -666,6 +757,8 @@ async function carregarNotificacoes(reiniciar = false) {
     // Delegação: um ouvinte só cobre todos os botões de excluir, e
     // continua valendo depois de "carregar mais" acrescentar itens.
     if (ehAdmin()) lista.onclick = aoClicarNaLista;
+
+    desenharLote();
 
     areaMais.innerHTML = temMais
       ? `<button type="button" class="botao" id="botao-mais">Carregar mais</button>`
@@ -1039,11 +1132,10 @@ async function telaWebhooks(container) {
       const detalhe = e.dados.porWebhook
         .map((w) => `  • ${w.nome} → ${rotuloPublico(w.publico)} (${w.quantidade})`)
         .join('\n');
-      const sobram = e.dados.manuais + e.dados.orfas;
-      const nota = sobram
-        ? `\n\n${sobram} aviso(s) continuam visíveis para todo mundo: ` +
-          `${e.dados.manuais} envio(s) manual(is) e ${e.dados.orfas} de webhook já excluído. ` +
-          `Esses só saem apagando um a um.`
+      const nota = e.dados.semGatilho
+        ? `\n\n${e.dados.semGatilho} aviso(s) continuam visíveis para todo mundo — envios ` +
+          `manuais e de webhooks já excluídos. Para esses, use o Histórico: filtre por ` +
+          `"Para: Todo o time" e mova para o setor.`
         : '';
 
       if (!confirm(`${e.message}\n\n${detalhe}${nota}\n\nAplicar? Não dá para desfazer.`)) return;

@@ -276,6 +276,8 @@ Sessão em cookie `httpOnly`. Todas as respostas são JSON.
 | GET | `/api/notificacoes` | membro | Linha do tempo, já recortada pelo que cabe a quem pede (`?limite=&antes=&tipo=&busca=&periodo=`; admin aceita `&escopo=meu`) |
 | GET | `/api/notificacoes/alcance` | operador | Quantos aparelhos um público atinge |
 | POST | `/api/notificacoes/enviar` | operador | Envio manual |
+| POST | `/api/notificacoes/mover-para-setor` | admin | Move para um setor tudo que o filtro selecionou |
+| POST | `/api/notificacoes/excluir-em-lote` | admin | Apaga tudo que o filtro selecionou |
 | DELETE | `/api/notificacoes/:id` | admin | Apaga do histórico |
 
 ### Webhooks e usuários

@@ -160,22 +160,24 @@ rotasWebhooks.post('/reprocessar-historico', (req, res) => {
     )
     .all();
 
-  // Ficam de fora do reprocessamento e seguem visíveis para todo mundo.
-  const manuais = db
+  /*
+   * Avisos sem gatilho que continuam abertos a todo mundo.
+   *
+   * São dois casos no mesmo balde: envio manual, e aviso de webhook
+   * excluído — ao apagar o gatilho a referência vira nula, então não há
+   * como distinguir um do outro nem de onde tirar o setor.
+   *
+   * Esses só saem pela ação em lote do histórico, filtrando por
+   * "Para: Todo o time" e movendo para o setor certo.
+   */
+  const semGatilho = db
     .prepare(`SELECT COUNT(*) AS n FROM notificacoes WHERE webhook_id IS NULL AND publico = 'todos'`)
-    .get().n;
-  const orfas = db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM notificacoes n
-        WHERE n.webhook_id IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM webhooks w WHERE w.id = n.webhook_id)`
-    )
     .get().n;
 
   const total = porWebhook.reduce((soma, w) => soma + w.quantidade, 0);
 
   if (!total) {
-    return res.json({ ok: true, alteradas: 0, semMudanca: true, manuais, orfas });
+    return res.json({ ok: true, alteradas: 0, semMudanca: true, semGatilho });
   }
 
   if (req.query.confirmar !== 'sim') {
@@ -183,8 +185,7 @@ rotasWebhooks.post('/reprocessar-historico', (req, res) => {
       erro: `${total} aviso(s) do histórico vão passar para o público atual do webhook que os gerou.`,
       total,
       porWebhook,
-      manuais,
-      orfas,
+      semGatilho,
     });
   }
 
@@ -197,7 +198,7 @@ rotasWebhooks.post('/reprocessar-historico', (req, res) => {
     return alteradas;
   });
 
-  res.json({ ok: true, alteradas: aplicar(), manuais, orfas });
+  res.json({ ok: true, alteradas: aplicar(), semGatilho });
 });
 
 /**

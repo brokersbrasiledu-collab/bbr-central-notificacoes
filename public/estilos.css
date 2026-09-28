@@ -495,6 +495,33 @@ h2 {
   line-height: 1.5;
 }
 
+/* Barra de ações em lote no histórico (só administrador). */
+.lote {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 18px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--borda);
+  border-left: 2px solid var(--ouro);
+  border-radius: 0 var(--raio) var(--raio) 0;
+  background: var(--ouro-tenue);
+}
+
+.lote__rotulo {
+  font-size: 13px;
+  color: var(--texto-suave);
+}
+
+.lote select {
+  width: auto;
+  min-width: 150px;
+  padding: 7px 30px 7px 12px;
+  font-size: 13px;
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+}
+
 /* Formulário de edição que abre dentro de um item da lista. */
 .edicao {
   display: flex;

@@ -8,6 +8,7 @@ import { tipoExiste } from '../servicos/tipos.js';
 import { exigirLogin, exigirNivel } from '../middlewares/auth.js';
 import { publicarNotificacao, aparelhosDoPublico } from '../servicos/push.js';
 import { inicioDoDiaUTC } from '../servicos/datas.js';
+import { resolverSetor } from '../servicos/setores.js';
 
 export const rotasNotificacoes = Router();
 
@@ -75,12 +76,51 @@ const SO_O_QUE_ME_CABE = `(
   )
 )`;
 
+/**
+ * Traduz os filtros da tela em condições de SQL.
+ *
+ * Fica separado porque a listagem e as ações em lote precisam recortar o
+ * histórico exatamente do mesmo jeito: o que o administrador vê na tela é
+ * o que ele vai mover ou apagar. Duas cópias dessa lógica seria pedir para
+ * um dia elas divergirem e alguém apagar mais do que estava olhando.
+ */
+function filtrosDoHistorico(query) {
+  const condicoes = [];
+  const valores = [];
+
+  if (tipoExiste(query.tipo)) {
+    condicoes.push('n.tipo = ?');
+    valores.push(query.tipo);
+  }
+
+  const busca = String(query.busca || '').trim().slice(0, 80);
+  if (busca) {
+    // Procura no título e no corpo: quem lembra de um trecho da mensagem
+    // acha do mesmo jeito. O escape evita que % e _ digitados virem curinga.
+    const termo = `%${busca.replace(/[%_\\]/g, '\\$&')}%`;
+    condicoes.push(`(n.titulo LIKE ? ESCAPE '\\' OR n.texto LIKE ? ESCAPE '\\')`);
+    valores.push(termo, termo);
+  }
+
+  if (Object.hasOwn(PERIODOS, query.periodo)) {
+    condicoes.push('n.criada_em >= ?');
+    valores.push(inicioDoDiaUTC(PERIODOS[query.periodo]));
+  }
+
+  // Filtrar pelo público é o que permite isolar o histórico antigo que
+  // ainda está visível para todo mundo.
+  const publico = String(query.publico || '').trim();
+  if (publico) {
+    condicoes.push('n.publico = ?');
+    valores.push(publico);
+  }
+
+  return { condicoes, valores };
+}
+
 rotasNotificacoes.get('/', exigirLogin, (req, res) => {
   const limite = Math.min(Math.max(Number(req.query.limite) || 30, 1), 100);
   const antes = Number(req.query.antes) || null;
-  const tipo = tipoExiste(req.query.tipo) ? req.query.tipo : null;
-  const busca = String(req.query.busca || '').trim().slice(0, 80);
-  const periodo = Object.hasOwn(PERIODOS, req.query.periodo) ? req.query.periodo : null;
 
   /*
    * Quem não está em setor nenhum acompanha a empresa inteira — inclusive
@@ -106,21 +146,10 @@ rotasNotificacoes.get('/', exigirLogin, (req, res) => {
     condicoes.push('n.id < ?');
     valores.push(antes);
   }
-  if (tipo) {
-    condicoes.push('n.tipo = ?');
-    valores.push(tipo);
-  }
-  if (busca) {
-    // Procura no título e no corpo: quem lembra de um trecho da mensagem
-    // acha do mesmo jeito. O escape evita que % e _ digitados virem curinga.
-    const termo = `%${busca.replace(/[%_\\]/g, '\\$&')}%`;
-    condicoes.push(`(n.titulo LIKE ? ESCAPE '\\' OR n.texto LIKE ? ESCAPE '\\')`);
-    valores.push(termo, termo);
-  }
-  if (periodo) {
-    condicoes.push('n.criada_em >= ?');
-    valores.push(inicioDoDiaUTC(PERIODOS[periodo]));
-  }
+
+  const { condicoes: extras, valores: maisValores } = filtrosDoHistorico(req.query);
+  condicoes.push(...extras);
+  valores.push(...maisValores);
 
   const onde = condicoes.length ? `WHERE ${condicoes.join(' AND ')}` : '';
 
@@ -191,6 +220,72 @@ rotasNotificacoes.get('/alcance', exigirNivel('operador'), (req, res) => {
   const tipo = tipoExiste(req.query.tipo) ? req.query.tipo : null;
   res.json({ aparelhos: aparelhosDoPublico(publico, tipo).length });
 });
+
+/**
+ * Ações em lote sobre o que o filtro selecionou — só administrador.
+ *
+ * Existe porque o reprocessamento por webhook não alcança tudo: envio
+ * manual não tem gatilho de onde tirar o setor, e aviso de webhook já
+ * excluído perdeu a referência. Sem isto, esse resto só sairia apagando
+ * linha por linha.
+ *
+ * Aqui o administrador filtra na tela, confere a contagem e então move
+ * para um setor ou apaga. O recorte usado é o mesmo da listagem, então o
+ * que ele viu é exatamente o que será afetado.
+ *
+ * Sem ?confirmar=sim devolve 409 com a contagem. Não há desfazer.
+ */
+function acaoEmLote(req, res, aplicar, descrever) {
+  const { condicoes, valores } = filtrosDoHistorico(req.query);
+
+  // Sem nenhum filtro a ação pegaria o histórico inteiro. Exigir ao menos
+  // um recorte evita o clique distraído que apaga tudo.
+  if (!condicoes.length) {
+    return res.status(400).json({
+      erro: 'Use ao menos um filtro antes de agir em lote — senão isto pegaria o histórico inteiro.',
+    });
+  }
+
+  const onde = `WHERE ${condicoes.join(' AND ')}`;
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM notificacoes n ${onde}`).get(...valores).n;
+
+  if (!total) return res.json({ ok: true, afetadas: 0, semMudanca: true });
+
+  if (req.query.confirmar !== 'sim') {
+    return res.status(409).json({ erro: descrever(total), total });
+  }
+
+  res.json({ ok: true, afetadas: aplicar(onde, valores) });
+}
+
+/** Move para um setor tudo que o filtro selecionou. */
+rotasNotificacoes.post('/mover-para-setor', exigirNivel('admin'), (req, res) => {
+  const setor = resolverSetor(req.query.setor_id ?? req.body?.setor_id);
+  if (!setor) return res.status(400).json({ erro: 'Escolha um setor de destino.' });
+
+  return acaoEmLote(
+    req,
+    res,
+    (onde, valores) =>
+      db
+        .prepare(`UPDATE notificacoes SET publico = ? WHERE id IN (SELECT n.id FROM notificacoes n ${onde})`)
+        .run(`setor:${setor.id}`, ...valores).changes,
+    (total) => `${total} aviso(s) vão passar a ser vistos só por quem é do setor ${setor.nome}.`
+  );
+});
+
+/** Apaga tudo que o filtro selecionou. */
+rotasNotificacoes.post('/excluir-em-lote', exigirNivel('admin'), (req, res) =>
+  acaoEmLote(
+    req,
+    res,
+    (onde, valores) =>
+      db
+        .prepare(`DELETE FROM notificacoes WHERE id IN (SELECT n.id FROM notificacoes n ${onde})`)
+        .run(...valores).changes,
+    (total) => `${total} aviso(s) serão apagados do histórico de todo mundo.`
+  )
+);
 
 /** Apagar uma linha do histórico — só admin. */
 rotasNotificacoes.delete('/:id', exigirNivel('admin'), (req, res) => {
